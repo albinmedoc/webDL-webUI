@@ -2,6 +2,10 @@
 
 A modern web interface for [svtplay-dl](https://github.com/spaam/svtplay-dl), built with Vue 3, Pinia, and Tailwind CSS.
 
+![Application Interface](screenshots/application-interface.png)
+
+*The web interface provides an intuitive way to download content from Swedish streaming services with real-time progress tracking and persistent download state.*
+
 ## Features
 
 - 🎯 **Easy-to-use web interface** for svtplay-dl
@@ -104,6 +108,18 @@ One of the key features is **persistent download state**:
 4. App syncs with server to update current status
 
 For detailed information, see [PERSISTENCE_GUIDE.md](./PERSISTENCE_GUIDE.md).
+
+## Screenshots
+
+### Main Interface
+![Application Interface](screenshots/application-interface.png)
+
+The interface features:
+- **Clean, modern design** with intuitive controls
+- **Real-time download queue** showing progress and status
+- **Advanced options panel** with all svtplay-dl features
+- **Persistent download indicators** showing restored sessions
+- **Download management tools** for cleanup and history
 
 ## API Endpoints
 
