@@ -55,7 +55,7 @@
       </div>
     </div>
 
-    <div class="card-body p-0" style="max-height: 500px;">
+    <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
       <div v-if="downloadStore.jobs.length === 0" class="text-center py-5 text-muted">
         <i class="bi bi-inbox display-4 d-block mb-3 text-muted"></i>
         <p class="mb-2">No downloads yet.</p>
