@@ -1,1 +1,1 @@
-{"root":["./src/main.ts","./src/stores/downloadstore.ts","./src/app.vue","./src/components/downloadform.vue","./src/components/downloadqueue.vue","./src/components/optionspanel.vue"],"version":"5.8.3"}
+{"root":["./src/frontend/main.ts","./src/frontend/stores/downloadstore.ts","./src/frontend/app.vue","./src/frontend/components/downloadform.vue","./src/frontend/components/downloadqueue.vue","./src/frontend/components/optionspanel.vue"],"version":"5.8.3"}
