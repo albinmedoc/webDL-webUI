@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  svtplay-dl-webui:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      # Mount a local directory for downloads
+      - ./downloads:/app/downloads
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
