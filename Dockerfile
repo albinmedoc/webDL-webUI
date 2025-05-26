@@ -1,4 +1,31 @@
-# Use Ubuntu as base image for better compatibility with svtplay-dl
+# Build stage
+FROM ubuntu:22.04 AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies for build
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+
+# Copy package files
+COPY package*.json ./
+
+# Install ALL Node.js dependencies (including dev dependencies for build)
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build the frontend application
+RUN npm run build
+
+# Production stage
 FROM ubuntu:22.04
 
 # Build arguments
@@ -9,7 +36,7 @@ ARG REVISION
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for runtime
 RUN apt-get update && apt-get install -y \
     curl \
     python3 \
@@ -28,14 +55,16 @@ RUN pip3 install svtplay-dl
 # Copy package files
 COPY package*.json ./
 
-# Install Node.js dependencies
-RUN npm ci --only=production
+# Install production dependencies + tsx for running TypeScript
+RUN npm ci --only=production \
+    && npm install tsx \
+    && npm cache clean --force
 
-# Copy source code
-COPY . .
+# Copy built frontend from builder stage
+COPY --from=builder /app/dist ./dist
 
-# Build the application
-RUN npm run build
+# Copy backend source files (we'll run TypeScript directly with tsx)
+COPY src/backend ./src/backend
 
 # Create downloads directory
 RUN mkdir -p /app/downloads
@@ -56,5 +85,5 @@ LABEL org.opencontainers.image.created="${BUILDTIME}"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${REVISION}"
 
-# Start the server
-CMD ["node", "src/backend/server.js"]
+# Start the server using tsx to run TypeScript directly
+CMD ["npx", "tsx", "src/backend/server.ts"]

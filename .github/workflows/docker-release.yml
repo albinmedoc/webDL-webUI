@@ -24,8 +24,10 @@ on:
           - prerelease
 
 env:
-  REGISTRY: ghcr.io
+  REGISTRY_GHCR: ghcr.io
+  REGISTRY_DOCKERHUB: docker.io
   IMAGE_NAME: ${{ github.repository }}
+  DOCKERHUB_IMAGE_NAME: albinmedoc/webdl-webui
 
 jobs:
   build-and-push:
@@ -44,18 +46,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.REGISTRY_GHCR }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_DOCKERHUB }}
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.DOCKERHUB_IMAGE_NAME }}
           tags: |
             # Tag for main branch
             type=ref,event=branch,suffix={{date '.YYYYMMDD'}}
@@ -97,7 +109,9 @@ jobs:
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v1
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-name: |
+            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.DOCKERHUB_IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
@@ -110,7 +124,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          image-ref: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
           format: 'sarif'
           output: 'trivy-results.sarif'
 
@@ -143,11 +157,13 @@ jobs:
           
           ### Pull Commands
           \`\`\`bash
-          # Latest release
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
+          # From Docker Hub (recommended)
+          docker pull ${{ env.DOCKERHUB_IMAGE_NAME }}:$VERSION
+          docker pull ${{ env.DOCKERHUB_IMAGE_NAME }}:latest
           
-          # Latest stable
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          # From GitHub Container Registry
+          docker pull ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:$VERSION
+          docker pull ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:latest
           \`\`\`
           
           ### Available Tags
@@ -156,6 +172,10 @@ jobs:
           - \`$(echo $VERSION | cut -d. -f1)\` - Major version
           - \`$(echo $VERSION | cut -d. -f1-2)\` - Major.Minor version
           
+          ### Multi-Architecture Support
+          - \`linux/amd64\` (Intel/AMD 64-bit)
+          - \`linux/arm64\` (ARM 64-bit, Apple Silicon, Raspberry Pi)
+          
           ### Features
           - SVT Play downloader web interface
           - Real-time download progress
@@ -163,13 +183,21 @@ jobs:
           - Vue.js frontend with modern UI
           - Docker containerized deployment
           
-          ### Usage
+          ### Quick Start
           \`\`\`bash
+          # Using Docker Hub
           docker run -d \\
             --name svtplay-dl-webui \\
             -p 3001:3001 \\
             -v \$(pwd)/downloads:/app/downloads \\
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
+            ${{ env.DOCKERHUB_IMAGE_NAME }}:$VERSION
+          
+          # Using GitHub Container Registry
+          docker run -d \\
+            --name svtplay-dl-webui \\
+            -p 3001:3001 \\
+            -v \$(pwd)/downloads:/app/downloads \\
+            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:$VERSION
           \`\`\`
           
           Access the application at: http://localhost:3001
