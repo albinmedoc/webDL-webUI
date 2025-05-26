@@ -14,3 +14,25 @@ yarn-error.log*
 .DS_Store
 .vscode
 *.log
+
+# Development files
+.github
+screenshots
+docker-compose.yml
+tsconfig.*.tsbuildinfo
+
+# Downloads directory (will be mounted)
+downloads/
+*.mp4
+*.mkv
+*.mp3
+*.srt
+*.vtt
+
+# Test files
+test/
+tests/
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js

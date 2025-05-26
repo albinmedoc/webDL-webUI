@@ -170,6 +170,58 @@ docker run -d \
   svtplay-dl-webui
 ```
 
+### GitHub Container Registry
+
+This project automatically builds and publishes Docker images to the GitHub Container Registry using GitHub Actions.
+
+#### Available Images
+
+```bash
+# Latest stable release
+docker pull ghcr.io/[username]/svtplay-dl-webui:latest
+
+# Specific version
+docker pull ghcr.io/[username]/svtplay-dl-webui:v1.2.3
+
+# Development version
+docker pull ghcr.io/[username]/svtplay-dl-webui:dev
+
+# Multi-architecture support (linux/amd64, linux/arm64)
+```
+
+#### Automated Tagging Strategy
+
+- **`latest`** - Latest stable release from main branch
+- **`v1.2.3`** - Exact version tags (automatically created)
+- **`v1.2`** - Major.minor version tags
+- **`v1`** - Major version tags  
+- **`dev`** - Latest development build from develop branch
+- **`main-YYYYMMDD`** - Daily builds from main branch
+- **`sha-abc1234`** - Git commit SHA tags
+- **`pr-123`** - Pull request builds
+
+#### Workflow Status
+
+[![Docker Release](../../actions/workflows/docker-release.yml/badge.svg)](../../actions/workflows/docker-release.yml)
+[![Auto Versioning](../../actions/workflows/auto-version.yml/badge.svg)](../../actions/workflows/auto-version.yml)
+[![Development Build](../../actions/workflows/dev-build.yml/badge.svg)](../../actions/workflows/dev-build.yml)
+
+#### Usage with GitHub Container Registry
+
+```bash
+# Pull and run latest release
+docker pull ghcr.io/[username]/svtplay-dl-webui:latest
+docker run -d \
+  --name svtplay-dl-webui \
+  -p 3001:3001 \
+  -v $(pwd)/downloads:/app/downloads \
+  ghcr.io/[username]/svtplay-dl-webui:latest
+
+# Or use docker-compose with ghcr.io image
+```
+
+For detailed information about the Docker automation, see [.github/DOCKER.md](.github/DOCKER.md).
+
 ## Development
 
 ### Project Structure

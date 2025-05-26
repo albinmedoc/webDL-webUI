@@ -1,6 +1,11 @@
 # Use Ubuntu as base image for better compatibility with svtplay-dl
 FROM ubuntu:22.04
 
+# Build arguments
+ARG BUILDTIME
+ARG VERSION
+ARG REVISION
+
 # Set working directory
 WORKDIR /app
 
@@ -41,6 +46,15 @@ EXPOSE 3001
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3001/api/health || exit 1
+
+# Add labels for metadata
+LABEL org.opencontainers.image.title="SVT Play Downloader Web UI"
+LABEL org.opencontainers.image.description="Web interface for svtplay-dl with real-time progress tracking"
+LABEL org.opencontainers.image.vendor="svtplay-dl-webui"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.created="${BUILDTIME}"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${REVISION}"
 
 # Start the server
 CMD ["node", "src/backend/server.js"]
