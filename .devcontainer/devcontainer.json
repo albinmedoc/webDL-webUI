@@ -17,7 +17,7 @@
     "DB_PATH": "/workspaces/svtplay-dl-webui/data/svtplay-dl-webui.db",
     "NZB_OUTPUT_DIR": "/workspaces/svtplay-dl-webui/data/nzb"
   },
-  "postCreateCommand": "pnpm install",
+  "postCreateCommand": "sudo chown -R node:node /workspaces/svtplay-dl-webui/node_modules && pnpm install",
   "mounts": [
     "source=svtplay-dl-webui-pnpm-store,target=/home/node/.local/share/pnpm/store,type=volume",
     "source=svtplay-dl-webui-node-modules,target=/workspaces/svtplay-dl-webui/node_modules,type=volume"
