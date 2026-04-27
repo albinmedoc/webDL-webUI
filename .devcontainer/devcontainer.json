@@ -1,0 +1,40 @@
+{
+  "name": "svtplay-dl-webui",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "INSTALL_RAR": "true"
+    },
+    "options": ["--platform=linux/amd64"]
+  },
+  "runArgs": ["--platform=linux/amd64"],
+  "forwardPorts": [3001, 5173],
+  "portsAttributes": {
+    "3001": { "label": "Backend (Express + Socket.IO)" },
+    "5173": { "label": "Frontend (Vite dev)" }
+  },
+  "remoteUser": "node",
+  "containerEnv": {
+    "USENET_WORK_DIR": "/workspaces/svtplay-dl-webui/data/work",
+    "DB_PATH": "/workspaces/svtplay-dl-webui/data/svtplay-dl-webui.db",
+    "NZB_OUTPUT_DIR": "/workspaces/svtplay-dl-webui/data/nzb"
+  },
+  "postCreateCommand": "pnpm install",
+  "mounts": [
+    "source=svtplay-dl-webui-pnpm-store,target=/home/node/.local/share/pnpm/store,type=volume",
+    "source=svtplay-dl-webui-node-modules,target=/workspaces/svtplay-dl-webui/node_modules,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Vue.volar",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "editor.formatOnSave": false,
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  }
+}
