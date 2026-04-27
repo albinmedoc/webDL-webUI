@@ -19,6 +19,9 @@ downloads/
 *.srt
 *.vtt
 
+# Application state directory (SQLite DB, work dirs, generated NZBs)
+data/
+
 # OS files
 Thumbs.db
 

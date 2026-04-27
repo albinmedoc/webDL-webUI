@@ -13,28 +13,39 @@
     "preview": "vite preview",
     "start": "npm run build && tsx src/backend/server.ts",
     "start:prod": "npm run build && npm run build:backend && node src/backend/dist/server.js",
-    "type-check": "vue-tsc --noEmit && tsc -p src/backend/tsconfig.json --noEmit"
+    "type-check": "vue-tsc --noEmit && tsc -p src/backend/tsconfig.json --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/backend/db/migrate.ts"
   },
   "dependencies": {
     "@types/node": "^22.15.21",
+    "better-sqlite3": "^12.9.0",
     "bootstrap": "^5.3.6",
     "cors": "^2.8.5",
+    "drizzle-orm": "^0.45.2",
     "express": "^4.19.2",
     "pinia": "^2.1.7",
     "socket.io": "^4.8.1",
     "vue": "^3.5.14"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.18",
     "@types/express": "^5.0.2",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vue/tsconfig": "^0.7.0",
     "autoprefixer": "^10.4.21",
+    "drizzle-kit": "^0.31.10",
     "socket.io-client": "^4.8.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.4",
     "typescript": "~5.8.3",
     "vite": "^6.3.5",
     "vue-tsc": "^2.2.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }

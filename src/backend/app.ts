@@ -5,6 +5,9 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 
 import { config } from './config/config.js';
+import { usenetConfig } from './config/usenetConfig.js';
+import { runMigrations } from './db/client.js';
+import { recoverInterruptedJobs } from './services/usenetRecoveryService.js';
 import { setupMiddleware, setupRoutes } from './middleware/setup.js';
 import { SocketController } from './controllers/socketController.js';
 import { logger } from './utils/logger.js';
@@ -20,9 +23,22 @@ export interface AppComponents {
 }
 
 export function createApp(): AppComponents {
+  runMigrations();
+  recoverInterruptedJobs();
+
+  if (usenetConfig.enabled) {
+    logger.info('Usenet upload pipeline enabled', {
+      host: usenetConfig.host,
+      port: usenetConfig.port,
+      groups: usenetConfig.groups,
+    });
+  } else {
+    logger.info('Usenet upload pipeline disabled (set USENET_ENABLED=true to enable)');
+  }
+
   const app = express();
   const server = createServer(app);
-  
+
   // Setup Socket.IO with CORS configuration
   const io = new SocketIOServer(server, {
     cors: config.cors

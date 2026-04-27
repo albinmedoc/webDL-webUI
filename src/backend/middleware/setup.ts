@@ -2,13 +2,15 @@ import cors from 'cors';
 import express, { Application, Request, Response } from 'express';
 import path from 'path';
 
+import { usenetConfig } from '../config/usenetConfig.js';
+
 export function setupMiddleware(app: Application, rootDir: string): void {
   // CORS middleware
   app.use(cors());
-  
+
   // JSON parsing middleware
   app.use(express.json());
-  
+
   // Static file serving middleware
   app.use(express.static(path.join(rootDir, 'dist')));
 }
@@ -20,7 +22,8 @@ export function setupRoutes(app: Application, rootDir: string): void {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      version: process.env.npm_package_version || '0.0.0'
+      version: process.env.npm_package_version || '0.0.0',
+      usenetEnabled: usenetConfig.enabled,
     });
   });
 
