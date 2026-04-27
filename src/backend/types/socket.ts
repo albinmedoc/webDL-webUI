@@ -20,12 +20,25 @@ export interface DownloadStarted {
   url: string;
 }
 
+export interface DownloadFile {
+  path: string;
+  size: number;
+}
+
+export interface DownloadFiles {
+  downloadId: string;
+  outputDir: string;
+  files: DownloadFile[];
+}
+
 export interface DownloadCompleted {
   downloadId: string;
   success: boolean;
   output: string;
   command?: string;
   error?: string;
+  outputDir?: string;
+  files?: DownloadFile[];
 }
 
 export interface DownloadError {

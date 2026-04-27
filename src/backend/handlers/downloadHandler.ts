@@ -1,5 +1,6 @@
 import { Socket } from 'socket.io';
 import downloadService from '../services/downloadService.js';
+import * as outputTracker from '../services/outputTracker.js';
 import { ProgressParser, ValidationUtils } from '../utils/progressUtils.js';
 import { DownloadRequest } from '../types/index.js';
 import { logger } from '../utils/logger.js';
@@ -38,6 +39,8 @@ export class DownloadHandler {
 
       const { url, args, downloadId } = data;
       logger.info('Starting download', { downloadId, url });
+
+      await outputTracker.beforeStart(downloadId, args);
 
       const downloadInfo = downloadService.startDownload(url, args, downloadId);
       const { process, command } = downloadInfo;
@@ -79,17 +82,28 @@ export class DownloadHandler {
       });
 
       // Handle process completion
-      process.on('close', (code: number | null) => {
+      process.on('close', async (code: number | null) => {
         downloadService.removeDownload(downloadId);
-        
+
         if (code === 0) {
+          const tracked = await outputTracker.afterComplete(downloadId);
+          if (tracked && tracked.files.length > 0) {
+            this.socket.emit('download-files', {
+              downloadId,
+              outputDir: tracked.outputDir,
+              files: tracked.files,
+            });
+          }
           this.socket.emit('download-completed', {
             downloadId,
             success: true,
             output: output.trim(),
-            command
+            command,
+            outputDir: tracked?.outputDir,
+            files: tracked?.files ?? [],
           });
         } else {
+          outputTracker.discard(downloadId);
           this.socket.emit('download-completed', {
             downloadId,
             success: false,
@@ -103,6 +117,7 @@ export class DownloadHandler {
       process.on('error', (error: Error) => {
         logger.error('Process error', { downloadId, error: error.message });
         downloadService.removeDownload(downloadId);
+        outputTracker.discard(downloadId);
         this.socket.emit('download-error', {
           downloadId,
           error: `Failed to start svtplay-dl: ${error.message}`
@@ -111,6 +126,7 @@ export class DownloadHandler {
 
     } catch (error) {
       logger.error('Download error', { downloadId: data.downloadId, error });
+      outputTracker.discard(data.downloadId);
       const errorInfo = handleError(error instanceof Error ? error : new Error('Unknown error'));
       this.socket.emit('download-error', {
         downloadId: data.downloadId,
