@@ -4,10 +4,8 @@
     "dockerfile": "Dockerfile",
     "args": {
       "INSTALL_RAR": "true"
-    },
-    "options": ["--platform=linux/amd64"]
+    }
   },
-  "runArgs": ["--platform=linux/amd64"],
   "forwardPorts": [3001, 5173],
   "portsAttributes": {
     "3001": { "label": "Backend (Express + Socket.IO)" },
