@@ -2,11 +2,8 @@ import { spawn } from 'child_process';
 
 import { logger } from '../../utils/logger.js';
 
-export type Archiver = 'rar' | '7z';
-
 export interface ToolAvailability {
-  archiver: Archiver | null;
-  archiverBin: string | null;
+  rar: boolean;
   parpar: boolean;
   nyuu: boolean;
 }
@@ -28,32 +25,21 @@ function which(bin: string): Promise<boolean> {
 export async function detectTools(): Promise<ToolAvailability> {
   if (cached) return cached;
 
-  const [hasRar, has7z, hasParpar, hasNyuu] = await Promise.all([
+  const [rar, parpar, nyuu] = await Promise.all([
     which('rar'),
-    which('7z'),
     which('parpar'),
     which('nyuu'),
   ]);
 
-  let archiver: Archiver | null = null;
-  let archiverBin: string | null = null;
-  if (hasRar) {
-    archiver = 'rar';
-    archiverBin = 'rar';
-  } else if (has7z) {
-    archiver = '7z';
-    archiverBin = '7z';
-  }
+  cached = { rar, parpar, nyuu };
 
-  cached = { archiver, archiverBin, parpar: hasParpar, nyuu: hasNyuu };
-
-  if (archiver) {
-    logger.info('Archiver detected', { tool: archiver });
+  if (rar) {
+    logger.info('rar detected on PATH');
   } else {
-    logger.warn('No archiver found on PATH (need rar or 7z)');
+    logger.warn('rar not found on PATH — Usenet uploads will fail until rar is installed');
   }
-  if (!hasParpar) logger.warn('parpar not found on PATH — install @animetosho/parpar globally');
-  if (!hasNyuu) logger.warn('nyuu not found on PATH — install nyuu globally');
+  if (!parpar) logger.warn('parpar not found on PATH — install @animetosho/parpar globally');
+  if (!nyuu) logger.warn('nyuu not found on PATH — install nyuu globally');
 
   return cached;
 }
