@@ -4,6 +4,7 @@ import path from 'path';
 
 import { logger } from '../../utils/logger.js';
 
+import { AbortError, attachAbort } from './spawnUtil.js';
 import { getCachedTools } from './tools.js';
 
 export interface CreateArchiveOptions {
@@ -14,6 +15,7 @@ export interface CreateArchiveOptions {
   volumeSizeMb: number;
   nfoPath?: string | null;
   onProgress?: (line: string) => void;
+  signal?: AbortSignal;
 }
 
 export interface CreateArchiveResult {
@@ -39,9 +41,10 @@ function quoteForLog(value: string): string {
 }
 
 export async function createArchive(opts: CreateArchiveOptions): Promise<CreateArchiveResult> {
-  const { mediaPath, workDir, password, baseName, volumeSizeMb, nfoPath, onProgress } = opts;
+  const { mediaPath, workDir, password, baseName, volumeSizeMb, nfoPath, onProgress, signal } = opts;
 
   ensureRarAvailable();
+  if (signal?.aborted) throw new AbortError();
 
   if (!Number.isFinite(volumeSizeMb) || volumeSizeMb <= 0) {
     throw new Error(`volumeSizeMb must be a positive number, got ${volumeSizeMb}`);
@@ -76,6 +79,7 @@ export async function createArchive(opts: CreateArchiveOptions): Promise<CreateA
 
   await new Promise<void>((resolve, reject) => {
     const proc = spawn('rar', args, { cwd: workDir });
+    const detach = attachAbort(proc, signal);
 
     let stderrBuf = '';
 
@@ -92,9 +96,15 @@ export async function createArchive(opts: CreateArchiveOptions): Promise<CreateA
       stderrBuf += chunk.toString();
     });
 
-    proc.on('error', (err) => reject(err));
-    proc.on('close', (code) => {
-      if (code === 0) {
+    proc.on('error', (err) => {
+      detach();
+      reject(err);
+    });
+    proc.on('close', (code, sig) => {
+      detach();
+      if (signal?.aborted) {
+        reject(new AbortError(`rar aborted (signal=${sig})`));
+      } else if (code === 0) {
         resolve();
       } else {
         reject(new Error(`rar exited with code ${code}: ${stderrBuf.trim()}`));

@@ -4,6 +4,7 @@ import path from 'path';
 
 import { logger } from '../../utils/logger.js';
 
+import { AbortError, attachAbort } from './spawnUtil.js';
 import { getCachedTools } from './tools.js';
 
 export interface GeneratePar2Options {
@@ -13,6 +14,7 @@ export interface GeneratePar2Options {
   percent: number;
   sliceSize?: string;
   onProgress?: (line: string) => void;
+  signal?: AbortSignal;
 }
 
 export interface GeneratePar2Result {
@@ -32,9 +34,10 @@ function ensureParparAvailable(): void {
 }
 
 export async function generatePar2(opts: GeneratePar2Options): Promise<GeneratePar2Result> {
-  const { inputFiles, workDir, baseName, percent, sliceSize = '1M', onProgress } = opts;
+  const { inputFiles, workDir, baseName, percent, sliceSize = '1M', onProgress, signal } = opts;
 
   ensureParparAvailable();
+  if (signal?.aborted) throw new AbortError();
 
   if (inputFiles.length === 0) {
     throw new Error('generatePar2 requires at least one input file');
@@ -63,6 +66,7 @@ export async function generatePar2(opts: GeneratePar2Options): Promise<GenerateP
 
   await new Promise<void>((resolve, reject) => {
     const proc = spawn('parpar', args, { cwd: workDir });
+    const detach = attachAbort(proc, signal);
 
     let stderrBuf = '';
 
@@ -79,12 +83,18 @@ export async function generatePar2(opts: GeneratePar2Options): Promise<GenerateP
       stderrBuf += chunk.toString();
     });
 
-    proc.on('error', (err) => reject(err));
-    proc.on('close', (code, signal) => {
-      if (code === 0) {
+    proc.on('error', (err) => {
+      detach();
+      reject(err);
+    });
+    proc.on('close', (code, sig) => {
+      detach();
+      if (signal?.aborted) {
+        reject(new AbortError(`parpar aborted (signal=${sig})`));
+      } else if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`parpar exited with code=${code} signal=${signal}: ${stderrBuf.trim()}`));
+        reject(new Error(`parpar exited with code=${code} signal=${sig}: ${stderrBuf.trim()}`));
       }
     });
   });

@@ -4,6 +4,8 @@ import fs from 'fs/promises';
 import { indexerConfig } from '../../config/usenetConfig.js';
 import { logger } from '../../utils/logger.js';
 
+import { AbortError, attachAbort } from './spawnUtil.js';
+
 export interface IndexerHookEnv {
   nzbPath: string;
   title: string;
@@ -55,17 +57,23 @@ function buildEnv(hookEnv: IndexerHookEnv): Record<string, string> {
   return env;
 }
 
-async function spawnHook(args: string[], extraEnv: Record<string, string>): Promise<IndexerHookResult> {
+async function spawnHook(
+  args: string[],
+  extraEnv: Record<string, string>,
+  signal?: AbortSignal
+): Promise<IndexerHookResult> {
   const scriptPath = indexerConfig.hookScript;
   if (!scriptPath) {
     throw new Error('INDEXER_HOOK_SCRIPT is not configured');
   }
   await ensureExecutable(scriptPath);
+  if (signal?.aborted) throw new AbortError();
 
   return await new Promise<IndexerHookResult>((resolve, reject) => {
     const proc = spawn(scriptPath, args, {
       env: { ...process.env, ...extraEnv },
     });
+    const detach = attachAbort(proc, signal);
 
     let stdout = '';
     let stderr = '';
@@ -77,14 +85,22 @@ async function spawnHook(args: string[], extraEnv: Record<string, string>): Prom
       stderr += chunk.toString();
     });
 
-    proc.on('error', (err) => reject(err));
-    proc.on('close', (code, signal) => {
+    proc.on('error', (err) => {
+      detach();
+      reject(err);
+    });
+    proc.on('close', (code, sig) => {
+      detach();
+      if (signal?.aborted) {
+        reject(new AbortError(`indexer hook aborted (signal=${sig})`));
+        return;
+      }
       const tailOut = tail(stdout, STDIO_TAIL_LIMIT);
       const tailErr = tail(stderr, STDIO_TAIL_LIMIT);
       resolve({
         ok: code === 0,
         exitCode: code,
-        signal,
+        signal: sig,
         stdout: tailOut,
         stderr: tailErr,
         response: tailOut.trim() || undefined,
@@ -93,19 +109,19 @@ async function spawnHook(args: string[], extraEnv: Record<string, string>): Prom
   });
 }
 
-export async function runHook(hookEnv: IndexerHookEnv): Promise<IndexerHookResult> {
+export async function runHook(hookEnv: IndexerHookEnv, signal?: AbortSignal): Promise<IndexerHookResult> {
   const env = buildEnv(hookEnv);
   logger.info('Running indexer hook', {
     script: indexerConfig.hookScript,
     env: maskEnv(env),
   });
-  return await spawnHook([], env);
+  return await spawnHook([], env, signal);
 }
 
-export async function runHookCheck(): Promise<IndexerHookResult> {
+export async function runHookCheck(signal?: AbortSignal): Promise<IndexerHookResult> {
   if (!indexerConfig.hookScript) {
     throw new Error('INDEXER_HOOK_SCRIPT is not configured');
   }
   logger.info('Running indexer hook --check', { script: indexerConfig.hookScript });
-  return await spawnHook(['--check'], {});
+  return await spawnHook(['--check'], {}, signal);
 }

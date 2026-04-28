@@ -6,6 +6,7 @@ import path from 'path';
 import type { UsenetConfig } from '../../config/usenetConfig.js';
 import { logger } from '../../utils/logger.js';
 
+import { AbortError, attachAbort } from './spawnUtil.js';
 import { getCachedTools } from './tools.js';
 
 export interface PostToUsenetOptions {
@@ -16,6 +17,7 @@ export interface PostToUsenetOptions {
   subjectTemplate?: string;
   onProgress?: (line: string) => void;
   dryRun?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface PostToUsenetResult {
@@ -87,7 +89,7 @@ export function buildNyuuArgs(opts: {
 }
 
 export async function postToUsenet(opts: PostToUsenetOptions): Promise<PostToUsenetResult> {
-  const { files, workDir, nzbOutPath, config, subjectTemplate, onProgress, dryRun } = opts;
+  const { files, workDir, nzbOutPath, config, subjectTemplate, onProgress, dryRun, signal } = opts;
 
   if (files.length === 0) throw new Error('postToUsenet requires at least one file');
 
@@ -101,10 +103,12 @@ export async function postToUsenet(opts: PostToUsenetOptions): Promise<PostToUse
   }
 
   ensureNyuuAvailable();
+  if (signal?.aborted) throw new AbortError();
   await fs.mkdir(path.dirname(nzbOutPath), { recursive: true });
 
   await new Promise<void>((resolve, reject) => {
     const proc = spawn('nyuu', args, { cwd: workDir });
+    const detach = attachAbort(proc, signal);
 
     let stderrBuf = '';
     let stderrTail: string[] = [];
@@ -127,13 +131,19 @@ export async function postToUsenet(opts: PostToUsenetOptions): Promise<PostToUse
       }
     });
 
-    proc.on('error', (err) => reject(err));
-    proc.on('close', (code, signal) => {
-      if (code === 0) {
+    proc.on('error', (err) => {
+      detach();
+      reject(err);
+    });
+    proc.on('close', (code, sig) => {
+      detach();
+      if (signal?.aborted) {
+        reject(new AbortError(`nyuu aborted (signal=${sig})`));
+      } else if (code === 0) {
         resolve();
       } else {
         const summary = stderrTail.length ? stderrTail.slice(-10).join('\n') : stderrBuf.trim();
-        reject(new Error(`nyuu exited with code=${code} signal=${signal}: ${summary}`));
+        reject(new Error(`nyuu exited with code=${code} signal=${sig}: ${summary}`));
       }
     });
   });

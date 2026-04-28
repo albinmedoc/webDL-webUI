@@ -8,6 +8,7 @@ import { config } from './config/config.js';
 import { usenetConfig } from './config/usenetConfig.js';
 import { runMigrations } from './db/client.js';
 import { recoverInterruptedJobs } from './services/usenetRecoveryService.js';
+import { startupKick as kickUsenetQueue } from './services/usenetService.js';
 import { setupMiddleware, setupRoutes } from './middleware/setup.js';
 import { SocketController } from './controllers/socketController.js';
 import { logger } from './utils/logger.js';
@@ -32,6 +33,7 @@ export function createApp(): AppComponents {
       port: usenetConfig.port,
       groups: usenetConfig.groups,
     });
+    kickUsenetQueue();
   } else {
     logger.info('Usenet upload pipeline disabled (set USENET_ENABLED=true to enable)');
   }
