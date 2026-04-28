@@ -1,10 +1,12 @@
 import { Socket } from 'socket.io';
+import { usenetConfig } from '../config/usenetConfig.js';
 import downloadService from '../services/downloadService.js';
 import * as outputTracker from '../services/outputTracker.js';
 import { ProgressParser, ValidationUtils } from '../utils/progressUtils.js';
 import { DownloadRequest } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { handleError } from '../utils/errors.js';
+import { UsenetHandler } from './usenetHandler.js';
 
 export interface DownloadStartData extends DownloadRequest {
   args: string[];
@@ -20,9 +22,11 @@ export interface DownloadSyncData {
 
 export class DownloadHandler {
   private socket: Socket;
+  private usenetHandler: UsenetHandler;
 
-  constructor(socket: Socket) {
+  constructor(socket: Socket, usenetHandler: UsenetHandler) {
     this.socket = socket;
+    this.usenetHandler = usenetHandler;
   }
 
   async handleStartDownload(data: DownloadStartData): Promise<void> {
@@ -102,6 +106,18 @@ export class DownloadHandler {
             outputDir: tracked?.outputDir,
             files: tracked?.files ?? [],
           });
+
+          if (data.autoPostUsenet && usenetConfig.enabled && tracked && tracked.files.length > 0) {
+            for (const file of tracked.files) {
+              await this.usenetHandler.handleStartUpload({
+                mediaPath: file.path,
+                downloadId,
+                category: data.usenetCategory ?? null,
+              });
+            }
+          } else if (data.autoPostUsenet && !usenetConfig.enabled) {
+            logger.warn('autoPostUsenet requested but USENET_ENABLED=false', { downloadId });
+          }
         } else {
           outputTracker.discard(downloadId);
           this.socket.emit('download-completed', {

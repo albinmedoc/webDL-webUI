@@ -20,8 +20,8 @@ export class SocketController {
     this.io.on('connection', (socket: Socket) => {
       logger.info('Client connected', { socketId: socket.id });
 
-      const downloadHandler = new DownloadHandler(socket);
       const usenetHandler = new UsenetHandler(socket);
+      const downloadHandler = new DownloadHandler(socket, usenetHandler);
 
       // Register all socket event handlers
       socket.on('start-download', (data: DownloadStartData) => {

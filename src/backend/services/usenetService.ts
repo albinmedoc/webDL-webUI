@@ -14,8 +14,10 @@ import {
 } from '../db/schema.js';
 import { logger } from '../utils/logger.js';
 
+import { checkDiskSpace } from './usenet/diskspace.js';
 import { generatePassword } from './usenet/password.js';
 import { runPipeline, type PipelineEvents } from './usenet/pipeline.js';
+import { getWorkRoot } from './usenet/workspace.js';
 
 export interface EnqueueJobInput {
   downloadId?: string | null;
@@ -81,6 +83,17 @@ export async function enqueueJob(input: EnqueueJobInput): Promise<UsenetJob> {
   const id = randomUUID();
   const now = Date.now();
   const mediaSize = await statSize(input.mediaPath);
+  if (mediaSize <= 0) {
+    throw new Error(`mediaPath has zero/unknown size: ${input.mediaPath}`);
+  }
+
+  const workRoot = getWorkRoot();
+  await fs.mkdir(workRoot, { recursive: true });
+  const disk = await checkDiskSpace(workRoot, mediaSize, usenetConfig.minFreeDiskMultiplier);
+  if (!disk.ok) {
+    throw new Error(disk.reason ?? 'disk space check failed');
+  }
+
   const password = generatePassword(16);
 
   const newJob: NewUsenetJob = {
@@ -121,12 +134,14 @@ function pickNextQueued(): UsenetJob | null {
 }
 
 function scheduleNext(): void {
-  if (active.size >= usenetConfig.maxConcurrent) return;
-  const next = pickNextQueued();
-  if (!next) return;
-  startJob(next.id);
-  if (active.size < usenetConfig.maxConcurrent) {
-    scheduleNext();
+  while (active.size < usenetConfig.maxConcurrent) {
+    const next = pickNextQueued();
+    // pickNextQueued reads `state = 'queued'` from the DB, but startJob only
+    // transitions out of 'queued' asynchronously (inside the pipeline). So the
+    // same row can come back here on subsequent iterations until the pipeline
+    // takes its first step. Bail out if we can't make progress on this row.
+    if (!next || active.has(next.id)) return;
+    startJob(next.id);
   }
 }
 

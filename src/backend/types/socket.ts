@@ -2,6 +2,8 @@ export interface DownloadRequest {
   url: string;
   args: string[];
   downloadId: string;
+  autoPostUsenet?: boolean;
+  usenetCategory?: string | null;
 }
 
 export interface DownloadProgress {
