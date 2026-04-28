@@ -88,6 +88,39 @@
           </div>
         </div>
 
+        <!-- Usenet Auto-post (only when backend feature flag is on) -->
+        <div v-if="usenetStore.enabled" class="mb-4">
+          <div class="card border-light">
+            <div class="card-body py-3">
+              <div class="form-check">
+                <input
+                  id="autoPostUsenet"
+                  v-model="downloadStore.currentOptions.autoPostUsenet"
+                  type="checkbox"
+                  class="form-check-input"
+                />
+                <label for="autoPostUsenet" class="form-check-label fw-semibold">
+                  <i class="bi bi-cloud-upload me-1"></i>
+                  Auto-post to Usenet after download
+                </label>
+              </div>
+              <div v-if="downloadStore.currentOptions.autoPostUsenet" class="mt-3">
+                <label for="usenetCategory" class="form-label">
+                  <i class="bi bi-tag me-1"></i>
+                  Category <small class="text-muted">(optional, passed to indexer hook)</small>
+                </label>
+                <input
+                  id="usenetCategory"
+                  v-model="downloadStore.currentOptions.usenetCategory"
+                  type="text"
+                  placeholder="e.g. tv, movies"
+                  class="form-control form-control-sm"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Quality and Format Selection -->
         <div class="row mb-4">
           <div class="col-md-6 mb-3">
@@ -279,8 +312,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useDownloadStore } from '../stores/downloadStore'
+import { useUsenetStore } from '../stores/usenetStore'
 
 const downloadStore = useDownloadStore()
+const usenetStore = useUsenetStore()
 
 const url = ref('')
 const isSubmitting = ref(false)

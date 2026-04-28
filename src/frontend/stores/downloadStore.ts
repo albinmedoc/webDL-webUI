@@ -72,6 +72,10 @@ export interface DownloadOptions {
   keepOriginal: boolean
   outputFormat: 'mp4' | 'mkv'
   chapters: boolean
+
+  // Usenet auto-post (only honored when backend has USENET_ENABLED=true)
+  autoPostUsenet?: boolean
+  usenetCategory?: string
 }
 
 export interface DownloadJob {
@@ -206,6 +210,8 @@ export const useDownloadStore = defineStore('download', () => {
     username: undefined,
     password: undefined,
     token: undefined,
+    autoPostUsenet: false,
+    usenetCategory: undefined,
   })
 
   // Computed properties
@@ -455,7 +461,9 @@ export const useDownloadStore = defineStore('download', () => {
     socket.value.emit('start-download', {
       downloadId: jobId,
       url: job.url,
-      args: args
+      args: args,
+      autoPostUsenet: !!job.options.autoPostUsenet,
+      usenetCategory: job.options.usenetCategory || null,
     })
   }
 

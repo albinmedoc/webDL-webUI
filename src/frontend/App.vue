@@ -32,13 +32,14 @@
         <div class="col-lg-8">
           <DownloadForm />
         </div>
-        
-        <!-- Download Queue -->
-        <div class="col-lg-4">
+
+        <!-- Right column: Download queue + (optional) Usenet queue -->
+        <div class="col-lg-4 d-flex flex-column gap-3">
           <DownloadQueue />
+          <UsenetQueue v-if="usenetStore.enabled" />
         </div>
       </div>
-      
+
       <!-- Options Panel -->
       <div class="row mt-4">
         <div class="col-12">
@@ -52,11 +53,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useDownloadStore } from './stores/downloadStore'
+import { useUsenetStore } from './stores/usenetStore'
 import DownloadForm from './components/DownloadForm.vue'
 import DownloadQueue from './components/DownloadQueue.vue'
 import OptionsPanel from './components/OptionsPanel.vue'
+import UsenetQueue from './components/UsenetQueue.vue'
 
 const downloadStore = useDownloadStore()
+const usenetStore = useUsenetStore()
 const showRestorationNotice = ref(false)
 
 const restoredJobsCount = computed(() => {
