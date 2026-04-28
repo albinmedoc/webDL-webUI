@@ -70,3 +70,63 @@ export interface SvtplayDlStatus {
   version?: string;
   error?: string;
 }
+
+export interface UsenetUploadStart {
+  mediaPath: string;
+  downloadId?: string | null;
+  category?: string | null;
+}
+
+export interface UsenetUploadCancel {
+  jobId: string;
+}
+
+export interface UsenetUploadRetry {
+  jobId: string;
+}
+
+export interface UsenetJobSummary {
+  id: string;
+  downloadId: string | null;
+  mediaPath: string;
+  mediaSizeBytes: number;
+  state: string;
+  failureState: string | null;
+  progress: number;
+  nzbPath: string | null;
+  error: string | null;
+  indexerResponse: string | null;
+  category: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface UsenetStateChanged {
+  jobId: string;
+  state: string;
+  failureState?: string | null;
+  error?: string | null;
+}
+
+export interface UsenetProgress {
+  jobId: string;
+  progress: number;
+}
+
+export interface UsenetLog {
+  jobId: string;
+  line: string;
+}
+
+export interface UsenetSyncResponse {
+  jobs: UsenetJobSummary[];
+}
+
+export interface UsenetEnqueued {
+  job: UsenetJobSummary;
+}
+
+export interface UsenetError {
+  jobId?: string;
+  error: string;
+}

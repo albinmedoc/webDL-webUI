@@ -200,7 +200,9 @@ export function retryJob(jobId: string): { retried: boolean; reason?: string } {
     .where(eq(usenetJobs.id, jobId))
     .run();
 
-  notify(jobId, 'state', resumeFrom);
+  // The pipeline's first setState() will emit the resumeFrom state — don't
+  // double-emit here. We persist the state above so the pipeline can pick
+  // the right resume point.
   startJob(jobId);
   return { retried: true };
 }
