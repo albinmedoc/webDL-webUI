@@ -40,3 +40,7 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Local dev env file (loaded only by dev:server scripts, never in production)
+.env
+.env.local

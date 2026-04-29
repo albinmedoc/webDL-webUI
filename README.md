@@ -115,6 +115,10 @@ The web UI can optionally re-post downloaded media to Usenet (Nyuu + ParPar)
 and notify an indexer via a user-supplied hook script. The whole subsystem
 is **off by default** — set `USENET_ENABLED=true` to turn it on.
 
+For an end-to-end walk-through of every stage (download → release naming →
+category auto-detection → archive/par2 → post → indexer hook → *arr-stack
+discovery), see [docs/pipeline.md](docs/pipeline.md).
+
 ### Pipeline at a glance
 
 ```
@@ -144,6 +148,12 @@ and the failure was in `indexing`) or redo the whole upload.
    completed downloads will queue automatically.
 
 ### Environment variables
+
+Every variable below is also editable from the Settings modal in the UI.
+**Environment variables win:** if a variable is set on the process, the UI
+shows the value as locked (📍) and refuses edits. Leave the env var unset to
+let the UI manage that key — values are persisted in the SQLite `app_settings`
+table and applied live without restart.
 
 | Variable                          | Default                                                | Purpose                                                                  |
 |-----------------------------------|--------------------------------------------------------|--------------------------------------------------------------------------|
@@ -178,13 +188,20 @@ behaviour:
 
 | Mode                | Inputs                                                           | Required exit codes                |
 |---------------------|------------------------------------------------------------------|------------------------------------|
-| Upload (no args)    | env: `INDEXER_NZB_PATH`, `INDEXER_TITLE`, `INDEXER_CATEGORY`, `INDEXER_PASSWORD`, `INDEXER_GROUP`, `INDEXER_MEDIA_PATH` | `0` on accepted upload, non-zero on failure (stderr captured into the job log) |
+| Upload (no args)    | env: `INDEXER_NZB_PATH`, `INDEXER_TITLE`, `INDEXER_CATEGORY` (Newznab ID, see below), `INDEXER_PASSWORD`, `INDEXER_GROUP`, `INDEXER_MEDIA_PATH` | `0` on accepted upload, non-zero on failure (stderr captured into the job log) |
 | `--check`           | (no env vars)                                                    | `0` if connectivity + credentials are fine, non-zero otherwise |
 
 Anything written to stdout in upload mode is recorded as the job's
 `indexerResponse` and shown in the History view. See
 [examples/drunkenslug-upload.sh](examples/drunkenslug-upload.sh) for a
 working reference implementation.
+
+`INDEXER_CATEGORY` is auto-detected from the svtplay-dl filename and set
+to a standard Newznab/Newsnab category ID — `5020` (TV/Foreign) when the
+filename has season/episode or a daily-show date, otherwise `2010`
+(Movies/Foreign). These IDs match what Sonarr/Radarr/Prowlarr use to
+filter Swedish content. nzbDAV setups can ignore the value entirely; it
+only matters when posting to a Newznab indexer.
 
 ### RAR licensing
 
@@ -224,8 +241,7 @@ error. ParPar and Nyuu are bundled (both are MIT-licensed npm packages).
 2. In the UI, click **gear → Test NNTP** (should show banner + 281 auth
    response) and **Test indexer hook** (should print whatever your hook's
    `--check` branch outputs).
-3. Add a small download, tick "Auto-post to Usenet" (and pick a category
-   if you want), submit.
+3. Add a small download, tick "Auto-post to Usenet", submit.
 4. Watch the Usenet queue sidebar: states should advance
    queued → archiving → par2 → posting → posted → indexing → done.
 5. Visit `/usenet`. The job is listed with a "Show password" reveal and a

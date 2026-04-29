@@ -4,7 +4,7 @@
       <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
           <i class="bi bi-gear me-2"></i>
-          Usenet Settings
+          Settings
         </h5>
         <button class="btn-close btn-close-white" aria-label="Close" @click="$emit('close')"></button>
       </div>
@@ -12,7 +12,7 @@
       <div class="card-body">
         <div v-if="loading" class="text-center py-4 text-muted">
           <div class="spinner-border" role="status"></div>
-          <div class="mt-2">Loading config…</div>
+          <div class="mt-2">Loading settings…</div>
         </div>
 
         <div v-else-if="loadError" class="alert alert-danger small">
@@ -20,66 +20,94 @@
           {{ loadError }}
         </div>
 
-        <div v-else-if="config">
-          <div v-if="!config.enabled" class="alert alert-warning small">
-            <i class="bi bi-exclamation-triangle me-1"></i>
-            Usenet pipeline is disabled. Set <code>USENET_ENABLED=true</code> to enable.
+        <div v-else>
+          <p class="small text-muted">
+            Values pinned by environment variables can't be edited here — they
+            override anything set in the UI.
+          </p>
+
+          <div v-for="group in groupOrder" :key="group.id">
+            <h6 class="text-primary mt-3 mb-2">
+              <i class="bi me-1" :class="group.icon"></i>
+              {{ group.label }}
+            </h6>
+            <table class="table table-sm align-middle">
+              <tbody>
+                <tr v-for="setting in settingsByGroup[group.id]" :key="setting.key">
+                  <th class="setting-label">
+                    {{ humanise(setting.key) }}
+                    <div class="text-muted env-var">
+                      <code>{{ setting.envVar }}</code>
+                      <i v-if="setting.lockedByEnv" class="bi bi-lock-fill ms-1" title="Pinned by environment variable"></i>
+                    </div>
+                  </th>
+                  <td>
+                    <input
+                      v-if="setting.kind !== 'list' && setting.kind !== 'shellArgs' && setting.kind !== 'boolean'"
+                      :type="setting.sensitive ? 'password' : (setting.kind === 'integer' || setting.kind === 'float' ? 'number' : 'text')"
+                      class="form-control form-control-sm"
+                      :placeholder="setting.sensitive && setting.value === '__SET__' ? '(unchanged — leave blank to keep)' : String(setting.default ?? '')"
+                      :disabled="setting.lockedByEnv"
+                      :value="setting.sensitive && setting.value === '__SET__' ? '' : (getDraft(setting) as string | number)"
+                      @input="onInput(setting, ($event.target as HTMLInputElement).value)"
+                    />
+
+                    <div v-else-if="setting.kind === 'boolean'" class="form-check form-switch">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        :disabled="setting.lockedByEnv"
+                        :checked="!!getDraft(setting)"
+                        @change="onBoolean(setting, ($event.target as HTMLInputElement).checked)"
+                      />
+                    </div>
+
+                    <input
+                      v-else
+                      type="text"
+                      class="form-control form-control-sm"
+                      :placeholder="(setting.default as string[]).join(setting.kind === 'list' ? ', ' : ' ')"
+                      :disabled="setting.lockedByEnv"
+                      :value="(getDraft(setting) as string[] | undefined)?.join(setting.kind === 'list' ? ', ' : ' ') ?? ''"
+                      @input="onListLike(setting, ($event.target as HTMLInputElement).value)"
+                    />
+                  </td>
+                  <td class="setting-actions">
+                    <button
+                      v-if="!setting.lockedByEnv && hasDraft(setting)"
+                      class="btn btn-link btn-sm p-0 text-muted"
+                      title="Discard change"
+                      @click="discardDraft(setting)"
+                    >
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
-          <h6 class="text-primary mb-2">
-            <i class="bi bi-broadcast me-1"></i>
-            Connection
-          </h6>
-          <table class="table table-sm">
-            <tbody>
-              <tr><th>Host</th><td><code>{{ config.host || '(not set)' }}</code></td></tr>
-              <tr><th>Port</th><td>{{ config.port }}</td></tr>
-              <tr><th>SSL</th><td>{{ config.ssl ? 'yes' : 'no' }}</td></tr>
-              <tr><th>User</th><td><code>{{ config.user || '(not set)' }}</code></td></tr>
-              <tr><th>Password</th><td>{{ config.passSet ? '••••••••' : '(not set)' }}</td></tr>
-              <tr><th>Connections</th><td>{{ config.connections }}</td></tr>
-              <tr><th>Groups</th><td><code>{{ config.groups.join(', ') || '(none)' }}</code></td></tr>
-            </tbody>
-          </table>
-
-          <h6 class="text-primary mt-3 mb-2">
-            <i class="bi bi-archive me-1"></i>
-            Archive &amp; PAR2
-          </h6>
-          <table class="table table-sm">
-            <tbody>
-              <tr><th>RAR volume size</th><td>{{ config.rarSizeMb }} MB</td></tr>
-              <tr><th>PAR2 redundancy</th><td>{{ config.par2Percent }}%</td></tr>
-              <tr><th>Max concurrent</th><td>{{ config.maxConcurrent }}</td></tr>
-              <tr><th>Disk-space multiplier</th><td>{{ config.minFreeDiskMultiplier }}× media size</td></tr>
-              <tr v-if="config.nfoPath"><th>NFO template</th><td><code>{{ config.nfoPath }}</code></td></tr>
-            </tbody>
-          </table>
-
-          <h6 class="text-primary mt-3 mb-2">
-            <i class="bi bi-tag me-1"></i>
-            Subject &amp; nyuu
-          </h6>
-          <table class="table table-sm">
-            <tbody>
-              <tr><th>Subject template</th><td><code class="small">{{ config.subjectTemplate }}</code></td></tr>
-              <tr v-if="config.nyuuExtraArgs.length > 0">
-                <th>Extra nyuu args</th>
-                <td><code class="small">{{ config.nyuuExtraArgs.join(' ') }}</code></td>
-              </tr>
-            </tbody>
-          </table>
-
-          <h6 class="text-primary mt-3 mb-2">
-            <i class="bi bi-search me-1"></i>
-            Indexer hook
-          </h6>
-          <table class="table table-sm">
-            <tbody>
-              <tr><th>Hook script</th><td>{{ config.indexer.hookScriptSet ? 'configured' : '(not set)' }}</td></tr>
-              <tr><th>NZB output dir</th><td><code>{{ config.indexer.nzbOutputDir }}</code></td></tr>
-            </tbody>
-          </table>
+          <div class="d-flex gap-2 mt-3">
+            <button
+              class="btn btn-primary btn-sm"
+              :disabled="!hasAnyDraft || saving"
+              @click="save"
+            >
+              <i class="bi" :class="saving ? 'bi-arrow-clockwise' : 'bi-save'"></i>
+              {{ saving ? 'Saving…' : 'Save changes' }}
+            </button>
+            <button
+              class="btn btn-outline-secondary btn-sm"
+              :disabled="!hasAnyDraft || saving"
+              @click="discardAll"
+            >
+              Discard all
+            </button>
+            <span v-if="saveResult" class="ms-2 small align-self-center" :class="saveResult.ok ? 'text-success' : 'text-danger'">
+              <i class="bi me-1" :class="saveResult.ok ? 'bi-check-circle' : 'bi-x-circle'"></i>
+              {{ saveResult.message }}
+            </span>
+          </div>
 
           <hr />
 
@@ -122,19 +150,13 @@
             >
               <i class="bi bi-exclamation-triangle me-1"></i>
               <strong>rar</strong> not found on PATH. Usenet uploads will fail.
-              See the
-              <a
-                href="https://github.com/albinmedoc/webDL-webUI#rar-licensing"
-                target="_blank"
-                rel="noopener noreferrer"
-              >RAR licensing notes</a> for install steps.
             </div>
           </div>
 
           <div class="d-flex gap-2 flex-wrap mb-2">
             <button
               class="btn btn-outline-primary btn-sm"
-              :disabled="!config.enabled || !config.host || nntpTesting"
+              :disabled="!enabled || !hostSet || nntpTesting"
               @click="testNntp"
             >
               <i class="bi" :class="nntpTesting ? 'bi-arrow-clockwise' : 'bi-broadcast-pin'"></i>
@@ -142,7 +164,7 @@
             </button>
             <button
               class="btn btn-outline-primary btn-sm"
-              :disabled="!config.enabled || !config.indexer.hookScriptSet || indexerTesting"
+              :disabled="!enabled || !hookScriptSet || indexerTesting"
               @click="testIndexer"
             >
               <i class="bi" :class="indexerTesting ? 'bi-arrow-clockwise' : 'bi-play-circle'"></i>
@@ -181,29 +203,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useUsenetStore } from '../stores/usenetStore'
 
-interface UsenetConfigPublic {
-  enabled: boolean
-  host: string
-  port: number
-  ssl: boolean
-  user: string
+interface Setting {
+  key: string
+  envVar: string
+  group: string
+  kind: 'string' | 'boolean' | 'integer' | 'float' | 'list' | 'shellArgs'
+  value: unknown
+  default: unknown
+  lockedByEnv: boolean
+  sensitive: boolean
+}
+
+interface SettingsResponse {
+  settings: Setting[]
   passSet: boolean
-  connections: number
-  groups: string[]
-  par2Percent: number
-  rarSizeMb: number
-  maxConcurrent: number
-  minFreeDiskMultiplier: number
-  subjectTemplate: string
-  nfoPath: string | null
-  nyuuExtraArgs: string[]
-  indexer: {
-    hookScriptSet: boolean
-    nzbOutputDir: string
-  }
 }
 
 interface NntpResult {
@@ -228,6 +244,40 @@ defineEmits<{ (e: 'close'): void }>()
 
 const usenetStore = useUsenetStore()
 
+const settings = ref<Setting[]>([])
+const draft = reactive<Record<string, unknown>>({})
+const loading = ref(true)
+const loadError = ref<string | null>(null)
+
+const saving = ref(false)
+const saveResult = ref<{ ok: boolean; message: string } | null>(null)
+
+const nntpTesting = ref(false)
+const nntpResult = ref<NntpResult | null>(null)
+const indexerTesting = ref(false)
+const indexerResult = ref<IndexerResult | null>(null)
+
+const groupOrder = [
+  { id: 'connection', label: 'Connection',     icon: 'bi-broadcast' },
+  { id: 'archive',    label: 'Archive & PAR2', icon: 'bi-archive' },
+  { id: 'subject',    label: 'Subject & nyuu', icon: 'bi-tag' },
+  { id: 'release',    label: 'Release naming', icon: 'bi-file-text' },
+  { id: 'workdir',    label: 'Work directory', icon: 'bi-folder' },
+  { id: 'indexer',    label: 'Indexer hook',   icon: 'bi-search' },
+  { id: 'download',   label: 'Download output', icon: 'bi-download' },
+]
+
+const settingsByGroup = computed(() => {
+  const out: Record<string, Setting[]> = {}
+  for (const g of groupOrder) out[g.id] = []
+  for (const s of settings.value) (out[s.group] ??= []).push(s)
+  return out
+})
+
+const enabled = computed(() => effective('enabled') === true)
+const hostSet = computed(() => typeof effective('host') === 'string' && (effective('host') as string).length > 0)
+const hookScriptSet = computed(() => typeof effective('hookScript') === 'string' && (effective('hookScript') as string).length > 0)
+
 const toolList = computed(() => {
   const t = usenetStore.tools
   if (!t) return []
@@ -238,23 +288,81 @@ const toolList = computed(() => {
   ]
 })
 
-const config = ref<UsenetConfigPublic | null>(null)
-const loading = ref(true)
-const loadError = ref<string | null>(null)
+const hasAnyDraft = computed(() => Object.keys(draft).length > 0)
 
-const nntpTesting = ref(false)
-const nntpResult = ref<NntpResult | null>(null)
+function effective(key: string): unknown {
+  if (key in draft) return draft[key]
+  return settings.value.find((s) => s.key === key)?.value
+}
 
-const indexerTesting = ref(false)
-const indexerResult = ref<IndexerResult | null>(null)
+function getDraft(setting: Setting): unknown {
+  return setting.key in draft ? draft[setting.key] : setting.value
+}
 
-async function loadConfig() {
+function hasDraft(setting: Setting): boolean {
+  return setting.key in draft
+}
+
+function discardDraft(setting: Setting): void {
+  delete draft[setting.key]
+}
+
+function discardAll(): void {
+  for (const k of Object.keys(draft)) delete draft[k]
+}
+
+function humanise(key: string): string {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (c) => c.toUpperCase())
+    .replace(/Mb$/i, 'MB')
+}
+
+function onInput(setting: Setting, raw: string): void {
+  if (setting.kind === 'integer') {
+    if (raw === '') {
+      draft[setting.key] = setting.default
+      return
+    }
+    const n = parseInt(raw, 10)
+    if (Number.isFinite(n)) draft[setting.key] = n
+  } else if (setting.kind === 'float') {
+    if (raw === '') {
+      draft[setting.key] = setting.default
+      return
+    }
+    const n = parseFloat(raw)
+    if (Number.isFinite(n)) draft[setting.key] = n
+  } else if (setting.sensitive) {
+    if (raw === '') {
+      // Sensitive blank input means "no change" — drop the draft.
+      delete draft[setting.key]
+    } else {
+      draft[setting.key] = raw
+    }
+  } else {
+    draft[setting.key] = raw
+  }
+}
+
+function onBoolean(setting: Setting, value: boolean): void {
+  draft[setting.key] = value
+}
+
+function onListLike(setting: Setting, raw: string): void {
+  const sep = setting.kind === 'list' ? ',' : /\s+/
+  const parts = raw.split(sep as never).map((s) => s.trim()).filter(Boolean)
+  draft[setting.key] = parts
+}
+
+async function loadSettings(): Promise<void> {
   loading.value = true
   loadError.value = null
   try {
-    const res = await fetch('/api/usenet/config')
+    const res = await fetch('/api/settings')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    config.value = await res.json()
+    const data = (await res.json()) as SettingsResponse
+    settings.value = data.settings
   } catch (err) {
     loadError.value = (err as Error).message
   } finally {
@@ -262,7 +370,40 @@ async function loadConfig() {
   }
 }
 
-async function testNntp() {
+async function save(): Promise<void> {
+  saving.value = true
+  saveResult.value = null
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(draft),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const result = (await res.json()) as {
+      applied: string[]
+      rejected: { key: string; reason: string }[]
+      settings: SettingsResponse
+    }
+    settings.value = result.settings.settings
+    discardAll()
+    if (result.rejected.length > 0) {
+      saveResult.value = {
+        ok: false,
+        message: `Some keys rejected: ${result.rejected.map((r) => `${r.key} (${r.reason})`).join(', ')}`,
+      }
+    } else {
+      saveResult.value = { ok: true, message: `Saved ${result.applied.length} setting${result.applied.length === 1 ? '' : 's'}` }
+    }
+    usenetStore.fetchHealth()
+  } catch (err) {
+    saveResult.value = { ok: false, message: (err as Error).message }
+  } finally {
+    saving.value = false
+  }
+}
+
+async function testNntp(): Promise<void> {
   nntpTesting.value = true
   nntpResult.value = null
   try {
@@ -275,7 +416,7 @@ async function testNntp() {
   }
 }
 
-async function testIndexer() {
+async function testIndexer(): Promise<void> {
   indexerTesting.value = true
   indexerResult.value = null
   try {
@@ -289,7 +430,7 @@ async function testIndexer() {
 }
 
 onMounted(() => {
-  loadConfig()
+  loadSettings()
   usenetStore.fetchTools()
 })
 </script>
@@ -307,12 +448,21 @@ onMounted(() => {
   overflow-y: auto;
 }
 .modal-dialog-custom {
-  max-width: 720px;
+  max-width: 760px;
   width: 100%;
 }
-.table th {
-  width: 40%;
+.setting-label {
+  width: 38%;
   font-weight: 500;
-  color: #6c757d;
+  color: #495057;
+}
+.env-var {
+  font-size: 0.75rem;
+  font-weight: 400;
+  margin-top: 2px;
+}
+.setting-actions {
+  width: 32px;
+  text-align: center;
 }
 </style>

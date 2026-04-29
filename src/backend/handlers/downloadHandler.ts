@@ -3,7 +3,8 @@ import { config } from '../config/config.js';
 import { usenetConfig } from '../config/usenetConfig.js';
 import * as downloadService from '../services/downloadService.js';
 import * as outputTracker from '../services/outputTracker.js';
-import { applyReleaseNaming } from '../services/usenet/releaseNamer.js';
+import path from 'path';
+import { applyReleaseNaming, detectNewznabCategory } from '../services/usenet/releaseNamer.js';
 import { ProgressParser, ValidationUtils } from '../utils/progressUtils.js';
 import { DownloadRequest } from '../types/index.js';
 import { logger } from '../utils/logger.js';
@@ -135,11 +136,15 @@ export function createDownloadHandler(socket: Socket, usenetHandler: UsenetHandl
           if (data.autoPostUsenet && usenetConfig.enabled && tracked && tracked.files.length > 0) {
             const quality = extractQualityFromArgs(data.args);
             for (const file of tracked.files) {
+              // Detect Newznab category from the original filename — applyReleaseNaming
+              // strips the {date} token for dated daily shows, which would otherwise
+              // make them look like movies after rename.
+              const category = detectNewznabCategory(path.basename(file.path));
               const mediaPath = await applyReleaseNaming(file.path, { quality });
               await usenetHandler.handleStartUpload({
                 mediaPath,
                 downloadId,
-                category: data.usenetCategory ?? null,
+                category,
               });
             }
           } else if (data.autoPostUsenet && !usenetConfig.enabled) {

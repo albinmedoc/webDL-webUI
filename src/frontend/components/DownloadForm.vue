@@ -74,19 +74,6 @@
                   Auto-post to Usenet after download
                 </label>
               </div>
-              <div v-if="downloadStore.currentOptions.autoPostUsenet" class="mt-3">
-                <label for="usenetCategory" class="form-label">
-                  <i class="bi bi-tag me-1"></i>
-                  Category <small class="text-muted">(optional, passed to indexer hook)</small>
-                </label>
-                <input
-                  id="usenetCategory"
-                  v-model="downloadStore.currentOptions.usenetCategory"
-                  type="text"
-                  placeholder="e.g. tv, movies"
-                  class="form-control form-control-sm"
-                />
-              </div>
               <div
                 v-if="
                   downloadStore.currentOptions.autoPostUsenet &&

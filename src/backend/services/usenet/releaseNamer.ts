@@ -43,6 +43,19 @@ function stripIdServiceSuffix(s: string): string {
   return s.replace(ID_SERVICE_SUFFIX, '');
 }
 
+// Newznab/Newsnab category IDs for *arr-stack discovery. svtplay-dl pulls from
+// Swedish streaming services, so the Foreign variants (5020/2010) are always
+// the right buckets for Sonarr/Radarr.
+const NEWZNAB_TV_FOREIGN = '5020';
+const NEWZNAB_MOVIES_FOREIGN = '2010';
+
+export function detectNewznabCategory(filename: string): string {
+  const parsed = parseSvtplayDlFilename(filename);
+  if (!parsed) return NEWZNAB_MOVIES_FOREIGN;
+  if (parsed.season || parsed.date) return NEWZNAB_TV_FOREIGN;
+  return NEWZNAB_MOVIES_FOREIGN;
+}
+
 export function parseSvtplayDlFilename(filename: string): ParsedName | null {
   const noExt = filename.replace(/\.[^.]+$/, '');
   if (!noExt) return null;

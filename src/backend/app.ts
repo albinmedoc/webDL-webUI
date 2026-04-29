@@ -7,6 +7,7 @@ import path from 'path';
 import { config } from './config/config.js';
 import { usenetConfig } from './config/usenetConfig.js';
 import { runMigrations } from './db/client.js';
+import { loadOverridesFromDb } from './services/settingsService.js';
 import { recoverInterruptedJobs } from './services/usenetRecoveryService.js';
 import { startRetentionScheduler } from './services/usenet/nzbRetention.js';
 import { detectTools } from './services/usenet/tools.js';
@@ -27,6 +28,7 @@ export interface AppComponents {
 
 export function createApp(): AppComponents {
   runMigrations();
+  loadOverridesFromDb();
   recoverInterruptedJobs();
 
   if (usenetConfig.enabled) {

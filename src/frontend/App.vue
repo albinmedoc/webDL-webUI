@@ -26,10 +26,9 @@
             Active downloads: <span class="badge bg-light text-primary">{{ downloadStore.activeJobs.length }}</span>
           </span>
           <button
-            v-if="usenetStore.enabled"
             class="btn btn-sm btn-outline-light"
             @click="settingsOpen = true"
-            title="Usenet settings"
+            title="Settings"
           >
             <i class="bi bi-gear"></i>
           </button>

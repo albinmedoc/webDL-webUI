@@ -43,3 +43,11 @@ export const usenetJobs = sqliteTable('usenet_jobs', {
 
 export type UsenetJob = typeof usenetJobs.$inferSelect;
 export type NewUsenetJob = typeof usenetJobs.$inferInsert;
+
+export const appSettings = sqliteTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type AppSetting = typeof appSettings.$inferSelect;

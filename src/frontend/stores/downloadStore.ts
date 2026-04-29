@@ -18,9 +18,10 @@ export interface DownloadOptions {
 
   outputFormat: 'mp4' | 'mkv'
 
-  // Usenet auto-post (only honored when backend has USENET_ENABLED=true)
+  // Usenet auto-post (only honored when backend has USENET_ENABLED=true).
+  // Newznab category (5020 TV/Foreign, 2010 Movies/Foreign) is auto-detected
+  // server-side from the filename — no UI input needed.
   autoPostUsenet?: boolean
-  usenetCategory?: string
 }
 
 export interface DownloadJob {
@@ -135,7 +136,6 @@ export const useDownloadStore = defineStore('download', () => {
     password: undefined,
     token: undefined,
     autoPostUsenet: false,
-    usenetCategory: undefined,
   })
 
   // Computed properties
@@ -387,7 +387,6 @@ export const useDownloadStore = defineStore('download', () => {
       url: job.url,
       args: args,
       autoPostUsenet: !!job.options.autoPostUsenet,
-      usenetCategory: job.options.usenetCategory || null,
     })
   }
 

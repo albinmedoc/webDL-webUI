@@ -8,6 +8,13 @@
       "when": 1777312105107,
       "tag": "0000_fearless_the_call",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777483529622,
+      "tag": "0001_pink_klaw",
+      "breakpoints": true
     }
   ]
 }

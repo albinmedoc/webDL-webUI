@@ -5,6 +5,12 @@ import path from 'path';
 
 import { getPublicConfig, usenetConfig, indexerConfig } from '../config/usenetConfig.js';
 import { USENET_JOB_STATES, type UsenetJobState } from '../db/schema.js';
+import { isRegistryKey } from '../config/registry.js';
+import {
+  clearOverride,
+  listSettings,
+  updateSettings,
+} from '../services/settingsService.js';
 import { runHookCheck } from '../services/usenet/indexer.js';
 import { probeNntp } from '../services/usenet/nntpProbe.js';
 import { detectTools } from '../services/usenet/tools.js';
@@ -36,6 +42,30 @@ export function setupRoutes(app: Application, rootDir: string): void {
 
   app.get('/api/usenet/config', (_req: Request, res: Response) => {
     res.json(getPublicConfig());
+  });
+
+  app.get('/api/settings', (_req: Request, res: Response) => {
+    res.json(listSettings());
+  });
+
+  app.put('/api/settings', (req: Request, res: Response) => {
+    const body = req.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      res.status(400).json({ error: 'request body must be an object of { key: value }' });
+      return;
+    }
+    const result = updateSettings(body as Record<string, unknown>);
+    res.json({ ...result, settings: listSettings() });
+  });
+
+  app.delete('/api/settings/:key', (req: Request, res: Response) => {
+    const key = req.params.key;
+    if (!isRegistryKey(key)) {
+      res.status(404).json({ error: 'unknown setting' });
+      return;
+    }
+    clearOverride(key);
+    res.json({ settings: listSettings() });
   });
 
   app.get('/api/usenet/tools', async (_req: Request, res: Response) => {

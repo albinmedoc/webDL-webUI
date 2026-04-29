@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:server": "tsx src/backend/server.ts",
-    "dev:server:watch": "tsx watch src/backend/server.ts",
+    "dev:server": "tsx --env-file-if-exists=.env src/backend/server.ts",
+    "dev:server:watch": "tsx watch --env-file-if-exists=.env src/backend/server.ts",
     "dev:full": "npm run build && npm run dev:server",
     "build": "vue-tsc -b && vite build",
     "build:backend": "tsc -p src/backend/tsconfig.json",

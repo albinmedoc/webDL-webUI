@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
+import path from 'path';
 
 import { eq, inArray, desc, like, and, sql, type SQL } from 'drizzle-orm';
 
@@ -18,6 +19,7 @@ import { checkDiskSpace } from './usenet/diskspace.js';
 import { removeNzbFile } from './usenet/nzbFiles.js';
 import { generatePassword } from './usenet/password.js';
 import { runPipeline, type PipelineEvents } from './usenet/pipeline.js';
+import { detectNewznabCategory } from './usenet/releaseNamer.js';
 import { getWorkRoot } from './usenet/workspace.js';
 
 export interface EnqueueJobInput {
@@ -155,7 +157,7 @@ export async function enqueueJob(input: EnqueueJobInput): Promise<UsenetJob> {
     nzbPath: null,
     error: null,
     indexerResponse: null,
-    category: input.category ?? null,
+    category: input.category ?? detectNewznabCategory(path.basename(input.mediaPath)),
     createdAt: now,
     updatedAt: now,
   };
