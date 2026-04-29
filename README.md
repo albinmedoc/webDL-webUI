@@ -109,6 +109,124 @@ One of the key features is **persistent download state**:
 
 For detailed information, see [PERSISTENCE_GUIDE.md](./PERSISTENCE_GUIDE.md).
 
+## Usenet upload pipeline (optional)
+
+The web UI can optionally re-post downloaded media to Usenet (Nyuu + ParPar)
+and notify an indexer via a user-supplied hook script. The whole subsystem
+is **off by default** — set `USENET_ENABLED=true` to turn it on.
+
+### Pipeline at a glance
+
+```
+download finished → archiving → par2 → posting → posted → indexing → done
+                                            └→ NZB written to disk
+                                               (indexer hook can be
+                                               retried in isolation)
+```
+
+Each Usenet job is persisted to SQLite (`/data/svtplay-dl-webui.db`) so jobs
+survive restarts. A failed job records *which* state it died in; the Retry
+button decides whether to re-run only the indexer hook (when the NZB exists
+and the failure was in `indexing`) or redo the whole upload.
+
+### Enabling
+
+1. Set `USENET_ENABLED=true` plus the connection vars (see the table below).
+2. Make sure `rar` is available — either build the image with
+   `--build-arg INSTALL_RAR=true` or bind-mount a host binary at
+   `/usr/local/bin/rar:ro`. `nyuu` and `@animetosho/parpar` are already
+   bundled.
+3. Optionally point `INDEXER_HOOK_SCRIPT` at a script that posts to your
+   indexer (see [examples/drunkenslug-upload.sh](examples/drunkenslug-upload.sh)).
+4. Open the gear icon in the nav bar → **Test NNTP** and **Test indexer
+   hook** to verify the configuration before the first real upload.
+5. On the Downloads page, tick **Auto-post to Usenet after download**;
+   completed downloads will queue automatically.
+
+### Environment variables
+
+| Variable                          | Default                                                | Purpose                                                                  |
+|-----------------------------------|--------------------------------------------------------|--------------------------------------------------------------------------|
+| `USENET_ENABLED`                  | `false`                                                | Master switch. `false` keeps the whole subsystem inert.                  |
+| `USENET_HOST`                     | *(unset)*                                              | NNTP server hostname (e.g. `news.eweka.nl`).                             |
+| `USENET_PORT`                     | `563`                                                  | NNTP port.                                                               |
+| `USENET_SSL`                      | `true`                                                 | Use TLS for the NNTP connection.                                         |
+| `USENET_USER` / `USENET_PASS`     | *(unset)*                                              | NNTP credentials. Password never appears in REST output.                 |
+| `USENET_CONNECTIONS`              | `20`                                                   | Number of parallel post connections (Nyuu `-n`).                         |
+| `USENET_GROUPS`                   | `alt.binaries.boneless`                                | Comma-separated newsgroups.                                              |
+| `USENET_PAR2_PERCENT`             | `10`                                                   | PAR2 redundancy (% of archive size).                                     |
+| `USENET_RAR_SIZE_MB`              | `50`                                                   | RAR volume size. **Must use rar `-m0` (store) — nzbDAV cannot read compressed RARs.** |
+| `USENET_MAX_CONCURRENT`           | `2`                                                    | Cap on parallel Usenet pipelines.                                        |
+| `USENET_MIN_FREE_DISK_MULTIPLIER` | `3`                                                    | Refuse to queue if free disk on the work volume < `mediaSize × this`.    |
+| `USENET_SUBJECT_TEMPLATE`         | `[{filename}] - "{rarname}" yEnc ({part}/{total})`     | Tokens: `{filename}`, `{rarname}`, `{part}`, `{total}`, `{random}`.      |
+| `USENET_NFO_PATH`                 | *(unset)*                                              | Optional path to an NFO file embedded in each RAR set.                   |
+| `USENET_NYUU_EXTRA_ARGS`          | *(empty)*                                              | Raw extra CLI args passed to Nyuu. Escape hatch for advanced configs.    |
+| `USENET_WORK_DIR`                 | `/data/work`                                           | RAR/PAR2 staging directory.                                              |
+| `INDEXER_HOOK_SCRIPT`             | *(unset)*                                              | Absolute path to your indexer hook (see contract below).                 |
+| `NZB_OUTPUT_DIR`                  | `/data/nzb`                                            | Where finished NZB files are written.                                    |
+| `DB_PATH`                         | `/data/svtplay-dl-webui.db`                            | SQLite location.                                                         |
+
+### Indexer hook contract
+
+The hook script is invoked with **no arguments** for an upload and with
+`--check` for the connectivity test in the Settings panel. Required
+behaviour:
+
+| Mode                | Inputs                                                           | Required exit codes                |
+|---------------------|------------------------------------------------------------------|------------------------------------|
+| Upload (no args)    | env: `INDEXER_NZB_PATH`, `INDEXER_TITLE`, `INDEXER_CATEGORY`, `INDEXER_PASSWORD`, `INDEXER_GROUP`, `INDEXER_MEDIA_PATH` | `0` on accepted upload, non-zero on failure (stderr captured into the job log) |
+| `--check`           | (no env vars)                                                    | `0` if connectivity + credentials are fine, non-zero otherwise |
+
+Anything written to stdout in upload mode is recorded as the job's
+`indexerResponse` and shown in the History view. See
+[examples/drunkenslug-upload.sh](examples/drunkenslug-upload.sh) for a
+working reference implementation.
+
+### RAR licensing
+
+`rar` is non-free software (license: <https://www.rarlab.com/license.htm>).
+The Docker image **does not bundle it by default**. If you accept the
+WinRAR license, build with `--build-arg INSTALL_RAR=true`; otherwise
+bind-mount your host binary, e.g.:
+
+```yaml
+volumes:
+  - /usr/local/bin/rar:/usr/local/bin/rar:ro
+```
+
+Without `rar`, Usenet uploads will fail at the archiving step with a clear
+error. ParPar and Nyuu are bundled (both are MIT-licensed npm packages).
+
+### Operational caveats
+
+- **Cancelling during `posting` orphans articles** on the news server: Nyuu
+  has already written some articles to NNTP before our SIGTERM lands, but no
+  NZB is generated, so they cannot be retrieved. The cancel-confirm dialog
+  in the queue surfaces this. Cancel earlier (`archiving`/`par2`) or wait
+  for the post to finish if you care about the bandwidth.
+- **No resume mid-post.** Nyuu has no resume primitive; "Retry" on a job
+  that died during `posting` re-runs the whole pipeline including a fresh
+  archive.
+- **Posting plans.** Some commercial NNTP servers (Eweka included) require
+  an explicit posting-enabled plan. If `Test NNTP` succeeds but actual
+  posts fail with `441` or similar, your account is read-only.
+- **nzbDAV compatibility.** RAR archives are written with `-m0` (store
+  mode) because nzbDAV cannot stream compressed volumes. Don't override
+  this in `USENET_NYUU_EXTRA_ARGS`.
+
+### Manual integration test
+
+1. `docker-compose up -d`
+2. In the UI, click **gear → Test NNTP** (should show banner + 281 auth
+   response) and **Test indexer hook** (should print whatever your hook's
+   `--check` branch outputs).
+3. Add a small download, tick "Auto-post to Usenet" (and pick a category
+   if you want), submit.
+4. Watch the Usenet queue sidebar: states should advance
+   queued → archiving → par2 → posting → posted → indexing → done.
+5. Visit `/usenet`. The job is listed with a "Show password" reveal and a
+   "Download NZB" button.
+
 ## Screenshots
 
 ### Main Interface
@@ -149,6 +267,20 @@ Health check endpoint.
 ### GET /api/check-svtplay-dl
 Check if svtplay-dl is available and get version info.
 
+### Usenet endpoints (only when `USENET_ENABLED=true`)
+
+| Method | Path                          | Purpose                                                      |
+|--------|-------------------------------|--------------------------------------------------------------|
+| GET    | `/api/usenet/config`          | Public configuration (passwords/hook-script paths redacted). |
+| POST   | `/api/usenet/test/nntp`       | Open a TLS/TCP connection, run AUTHINFO + GROUP, return banner + duration. |
+| POST   | `/api/usenet/test/indexer`    | Run the configured hook with `--check`, return exit code + stdout/stderr tail. |
+| GET    | `/api/usenet/history`         | Paginated job list. Query params: `page`, `pageSize`, `state`, `search` (filename substring). |
+| GET    | `/api/usenet/jobs/:id`        | Full job row, including `rarPassword` (used by the password reveal). |
+| GET    | `/api/usenet/jobs/:id/nzb`    | Download the generated NZB file.                             |
+
+Most live updates flow through Socket.IO; these REST endpoints exist for
+config display, the History view, and one-shot operations.
+
 ## Docker Configuration
 
 ### Environment Variables
@@ -158,7 +290,15 @@ Check if svtplay-dl is available and get version info.
 
 ### Volume Mounts
 
-- `/app/downloads`: Mount point for downloaded files
+- `/app/downloads`: Mount point for downloaded files.
+- `/data`: Persistent state for the Usenet pipeline (SQLite DB, RAR/PAR2
+  work area, generated NZBs). Required when `USENET_ENABLED=true`.
+
+### Build args
+
+- `INSTALL_RAR` (default `false`): when `true`, the runtime image downloads
+  rar from rarlab and installs it at `/usr/local/bin/rar`. See the [RAR
+  licensing](#rar-licensing) section.
 
 ### Example Docker Run
 

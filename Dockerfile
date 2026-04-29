@@ -1,89 +1,110 @@
-# Build stage
+# syntax=docker/dockerfile:1.6
+
+# ───────────────────────────── Build stage ─────────────────────────────
 FROM ubuntu:22.04 AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies for build
 RUN apt-get update && apt-get install -y \
-    curl \
+    curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 20
+# Node.js 20
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# Copy package files
-COPY package*.json ./
+# pnpm
+RUN npm install -g pnpm@10
 
-# Install ALL Node.js dependencies (including dev dependencies for build)
-RUN npm ci
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
-# Copy source code
 COPY . .
+RUN pnpm run build
 
-# Build the frontend application
-RUN npm run build
-
-# Production stage
+# ──────────────────────────── Runtime stage ────────────────────────────
 FROM ubuntu:22.04
 
-# Build arguments
 ARG BUILDTIME
 ARG VERSION
 ARG REVISION
 
-# Set working directory
+# Set INSTALL_RAR=true at build time to bake rar into the image.
+# Default is false because rar (winrar.exe / rarlab) is non-free; users who
+# accept the WinRAR license can enable it, or bind-mount a host binary at
+# /usr/local/bin/rar:ro instead.
+ARG INSTALL_RAR=false
+
 WORKDIR /app
 
-# Install system dependencies for runtime
 RUN apt-get update && apt-get install -y \
-    curl \
-    python3 \
-    python3-pip \
-    ffmpeg \
-    git \
+    curl ca-certificates \
+    python3 python3-pip \
+    ffmpeg git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 20
+# Node.js 20 + pnpm
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
+    && apt-get install -y nodejs \
+    && npm install -g pnpm@10
 
-# Install svtplay-dl
-RUN pip3 install svtplay-dl
+# svtplay-dl
+RUN pip3 install --no-cache-dir svtplay-dl
 
-# Copy package files
-COPY package*.json ./
-
-# Install production dependencies + tsx for running TypeScript
-RUN npm ci --only=production \
-    && npm install tsx \
+# Usenet tooling: nyuu + @animetosho/parpar (verified package names).
+RUN npm install -g nyuu @animetosho/parpar \
     && npm cache clean --force
 
-# Copy built frontend from builder stage
-COPY --from=builder /app/dist ./dist
+# Optional: rar (license: see https://www.rarlab.com/license.htm).
+# Disabled by default. Build with --build-arg INSTALL_RAR=true to enable.
+RUN if [ "$INSTALL_RAR" = "true" ]; then \
+        set -eux; \
+        ARCH="$(dpkg --print-architecture)"; \
+        case "$ARCH" in \
+            amd64)  RAR_URL="https://www.rarlab.com/rar/rarlinux-x64-700.tar.gz" ;; \
+            arm64)  RAR_URL="https://www.rarlab.com/rar/rarlinux-arm-700.tar.gz" ;; \
+            *) echo "Unsupported arch for rar: $ARCH" >&2; exit 1 ;; \
+        esac; \
+        curl -fsSL "$RAR_URL" -o /tmp/rar.tgz; \
+        tar -xzf /tmp/rar.tgz -C /tmp; \
+        install -m 0755 /tmp/rar/rar /usr/local/bin/rar; \
+        install -m 0755 /tmp/rar/unrar /usr/local/bin/unrar; \
+        rm -rf /tmp/rar /tmp/rar.tgz; \
+        rar -? | head -1; \
+    else \
+        echo "INSTALL_RAR=false: rar is not bundled. Bind-mount /usr/local/bin/rar:ro at runtime."; \
+    fi
 
-# Copy backend source files (we'll run TypeScript directly with tsx)
+# Production deps + tsx for running TypeScript directly
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod --frozen-lockfile \
+    && pnpm add tsx
+
+COPY --from=builder /app/dist ./dist
 COPY src/backend ./src/backend
 
-# Create downloads directory
-RUN mkdir -p /app/downloads
+# Create downloads + persistent data dirs.
+# /data is intended to be a volume — DB, work area, NZB output all live here.
+RUN mkdir -p /app/downloads /data /data/work /data/nzb
 
-# Expose port
+# Default paths point at the /data volume; override via env if needed.
+ENV DB_PATH=/data/svtplay-dl-webui.db \
+    USENET_WORK_DIR=/data/work \
+    NZB_OUTPUT_DIR=/data/nzb \
+    PORT=3001 \
+    NODE_ENV=production
+
 EXPOSE 3001
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3001/api/health || exit 1
+    CMD curl -f http://localhost:3001/api/health || exit 1
 
-# Add labels for metadata
 LABEL org.opencontainers.image.title="SVT Play Downloader Web UI"
-LABEL org.opencontainers.image.description="Web interface for svtplay-dl with real-time progress tracking"
+LABEL org.opencontainers.image.description="Web interface for svtplay-dl with optional Usenet upload pipeline"
 LABEL org.opencontainers.image.vendor="svtplay-dl-webui"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.created="${BUILDTIME}"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${REVISION}"
 
-# Start the server using tsx to run TypeScript directly
-CMD ["npx", "tsx", "src/backend/server.ts"]
+CMD ["pnpm", "exec", "tsx", "src/backend/server.ts"]
