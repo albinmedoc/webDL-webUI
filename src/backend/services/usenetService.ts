@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 
-import { eq, inArray, desc } from 'drizzle-orm';
+import { eq, inArray, desc, like, and, sql, type SQL } from 'drizzle-orm';
 
 import { usenetConfig } from '../config/usenetConfig.js';
 import { getDb } from '../db/client.js';
@@ -52,6 +52,52 @@ export function subscribe(observer: JobObserver): () => void {
 
 export function listJobs(limit = 100): UsenetJob[] {
   return getDb().select().from(usenetJobs).orderBy(desc(usenetJobs.createdAt)).limit(limit).all();
+}
+
+export interface ListJobsQuery {
+  page?: number;
+  pageSize?: number;
+  state?: UsenetJobState | null;
+  search?: string | null;
+}
+
+export interface ListJobsResult {
+  jobs: UsenetJob[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export function listJobsPaginated(query: ListJobsQuery = {}): ListJobsResult {
+  const page = Math.max(1, Math.floor(query.page ?? 1));
+  const pageSize = Math.min(200, Math.max(1, Math.floor(query.pageSize ?? 25)));
+  const offset = (page - 1) * pageSize;
+
+  const conditions: SQL[] = [];
+  if (query.state) conditions.push(eq(usenetJobs.state, query.state));
+  if (query.search && query.search.trim().length > 0) {
+    const escaped = query.search.replace(/[\\%_]/g, (c) => `\\${c}`);
+    conditions.push(like(usenetJobs.mediaPath, `%${escaped}%`));
+  }
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const jobs = getDb()
+    .select()
+    .from(usenetJobs)
+    .where(whereClause)
+    .orderBy(desc(usenetJobs.createdAt))
+    .limit(pageSize)
+    .offset(offset)
+    .all();
+
+  const totalRow = getDb()
+    .select({ count: sql<number>`count(*)` })
+    .from(usenetJobs)
+    .where(whereClause)
+    .get();
+  const total = Number(totalRow?.count ?? 0);
+
+  return { jobs, total, page, pageSize };
 }
 
 export function getJob(jobId: string): UsenetJob | null {
