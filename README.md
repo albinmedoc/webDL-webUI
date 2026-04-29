@@ -161,10 +161,14 @@ and the failure was in `indexing`) or redo the whole upload.
 | `USENET_SUBJECT_TEMPLATE`         | `[{filename}] - "{rarname}" yEnc ({part}/{total})`     | Tokens: `{filename}`, `{rarname}`, `{part}`, `{total}`, `{random}`.      |
 | `USENET_NFO_PATH`                 | *(unset)*                                              | Optional path to an NFO file embedded in each RAR set.                   |
 | `USENET_NYUU_EXTRA_ARGS`          | *(empty)*                                              | Raw extra CLI args passed to Nyuu. Escape hatch for advanced configs.    |
+| `USENET_RELEASE_GROUP`            | `SVTDL`                                                | Group tag substituted for `{group}` in the release-name template.        |
+| `USENET_RELEASE_NAME_TEMPLATE`    | `{show}.S{season}E{episode}.{quality}.WEB-DL.h264-{group}` | Filename template applied to media files before auto-post. Tokens: `{show}`, `{season}`, `{episode}`, `{title}`, `{year}`, `{date}`, `{quality}`, `{group}`. Unfilled tokens are stripped cleanly (e.g. parsing `programname-s02e04` with quality `1080p` produces `Programname.S02E04.1080p.WEB-DL.h264-SVTDL.mkv`). Only kicks in when **Auto-post to Usenet** is ticked. |
 | `USENET_WORK_DIR`                 | `/data/work`                                           | RAR/PAR2 staging directory.                                              |
 | `INDEXER_HOOK_SCRIPT`             | *(unset)*                                              | Absolute path to your indexer hook (see contract below).                 |
 | `NZB_OUTPUT_DIR`                  | `/data/nzb`                                            | Where finished NZB files are written.                                    |
+| `NZB_RETENTION_DAYS`              | `0` (keep forever)                                     | When > 0, a background sweep (twice per day + on startup) deletes `.nzb` files older than this and clears `nzbPath` on the matching `usenet_jobs` rows. |
 | `DB_PATH`                         | `/data/svtplay-dl-webui.db`                            | SQLite location.                                                         |
+| `DOWNLOAD_OUTPUT_DIR`             | `/app/downloads`                                       | Default svtplay-dl output directory used when the form's "Output Directory" field is empty. The path is also `-o`-injected so the snapshot tracker and the downloader agree on where files land. |
 
 ### Indexer hook contract
 
@@ -370,8 +374,7 @@ For detailed information about the Docker automation, see [.github/DOCKER.md](.g
 src/
 ├── components/
 │   ├── DownloadForm.vue      # Main download form
-│   ├── DownloadQueue.vue     # Download queue display
-│   └── OptionsPanel.vue      # Advanced options
+│   └── DownloadQueue.vue     # Download queue display
 ├── stores/
 │   └── downloadStore.ts      # Pinia store for state management
 ├── App.vue                   # Main application component

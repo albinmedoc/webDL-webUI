@@ -20,12 +20,6 @@
           <UsenetQueue v-if="usenetStore.enabled" />
         </div>
       </div>
-
-      <div class="row mt-4">
-        <div class="col-12">
-          <OptionsPanel />
-        </div>
-      </div>
     </main>
   </div>
 </template>
@@ -36,7 +30,6 @@ import { useDownloadStore } from '../stores/downloadStore'
 import { useUsenetStore } from '../stores/usenetStore'
 import DownloadForm from '../components/DownloadForm.vue'
 import DownloadQueue from '../components/DownloadQueue.vue'
-import OptionsPanel from '../components/OptionsPanel.vue'
 import UsenetQueue from '../components/UsenetQueue.vue'
 
 const downloadStore = useDownloadStore()

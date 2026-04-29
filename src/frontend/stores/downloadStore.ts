@@ -3,75 +3,20 @@ import { ref, computed, watch } from 'vue'
 import { io, Socket } from 'socket.io-client'
 
 export interface DownloadOptions {
-  // Basic options
   url: string
   output?: string
-  filename?: string
   subfolder: boolean
-  force: boolean
-  
-  // Authentication
+
   username?: string
   password?: string
   token?: string
-  
-  // Quality options
+
   quality?: string
-  flexibleQuality?: number
-  preferred?: 'dash' | 'hls' | 'http'
   listQuality: boolean
-  streamPriority: string[]
-  formatPreferred: string[]
-  audioLanguage?: string
-  videoRole?: string
-  resolution?: string
-  
-  // Subtitle options
-  subtitle: boolean
-  mergeSubtitle: boolean
-  forceSubtitle: boolean
-  requireSubtitle: boolean
-  allSubtitles: boolean
-  rawSubtitles: boolean
-  convertSubtitleColors: boolean
-  
-  // Download options
-  live: boolean
-  captureTime?: number
-  thumbnail: boolean
-  getUrl: boolean
-  getOnlyEpisodeUrl: boolean
-  
-  // Advanced options
-  silent: boolean
-  silentSemi: boolean
-  verbose: boolean
-  dontVerifySslCert: boolean
-  httpHeaders: string[]
-  cookies: string[]
-  exclude: string[]
-  afterDate?: string
-  proxy?: string
-  
-  // Content options
+
   allEpisodes: boolean
-  allLast?: number
-  includeClips: boolean
-  reverse: boolean
-  
-  // Output options
-  onlyAudio: boolean
-  onlyVideo: boolean
-  nfo: boolean
-  forceNfo: boolean
-  
-  // Post-processing
-  noRemux: boolean
-  noMerge: boolean
-  noPostprocess: boolean
-  keepOriginal: boolean
+
   outputFormat: 'mp4' | 'mkv'
-  chapters: boolean
 
   // Usenet auto-post (only honored when backend has USENET_ENABLED=true)
   autoPostUsenet?: boolean
@@ -106,30 +51,39 @@ export const useDownloadStore = defineStore('download', () => {
     svtplayDlAvailable: false
   })
   
+  // Whitelist of fields safe to round-trip through localStorage. `options` is
+  // intentionally excluded so credentials (username/password/token) never hit
+  // disk; the user re-enters them on retry.
+  const sanitiseJobForStorage = (job: DownloadJob) => ({
+    id: job.id,
+    url: job.url,
+    status: job.status,
+    progress: job.progress,
+    output: job.output,
+    error: job.error,
+    startTime: job.startTime,
+    endTime: job.endTime,
+    logs: job.logs,
+  })
+
   // Load persisted jobs from localStorage on store initialization
   const loadPersistedJobs = () => {
     try {
       const savedJobs = localStorage.getItem('svtplay-dl-jobs')
-      if (savedJobs) {
-        const parsedJobs = JSON.parse(savedJobs)
-        console.log(`Loading ${parsedJobs.length} persisted jobs from localStorage`)
-        // Convert date strings back to Date objects and mark as restored
-        jobs.value = parsedJobs.map((job: any) => {
-          console.log('Processing job:', job.id, job.status, job.url)
-          return {
-            ...job,
-            progress: typeof job.progress === 'number' ? job.progress : 0,
-            startTime: job.startTime ? new Date(job.startTime) : undefined,
-            endTime: job.endTime ? new Date(job.endTime) : undefined,
-            logs: [...(job.logs || []), 'Job restored from previous session'],
-            options: job.options || {},
-            status: job.status || 'error'
-          }
-        })
-        console.log('Jobs successfully loaded and restored:', jobs.value.length)
-      } else {
-        console.log('No persisted jobs found in localStorage')
-      }
+      if (!savedJobs) return
+      const parsedJobs = JSON.parse(savedJobs)
+      jobs.value = parsedJobs.map((job: any) => ({
+        id: job.id,
+        url: job.url,
+        status: job.status || 'error',
+        progress: typeof job.progress === 'number' ? job.progress : 0,
+        output: job.output,
+        error: job.error,
+        startTime: job.startTime ? new Date(job.startTime) : undefined,
+        endTime: job.endTime ? new Date(job.endTime) : undefined,
+        logs: [...(job.logs || []), 'Job restored from previous session'],
+        options: { url: job.url ?? '', subfolder: false, listQuality: false, allEpisodes: false, outputFormat: 'mp4' },
+      }))
     } catch (error) {
       console.error('Failed to load persisted jobs:', error)
       jobs.value = []
@@ -139,8 +93,10 @@ export const useDownloadStore = defineStore('download', () => {
   // Save jobs to localStorage whenever they change
   const persistJobs = () => {
     try {
-      localStorage.setItem('svtplay-dl-jobs', JSON.stringify(jobs.value))
-      console.log(`Persisted ${jobs.value.length} jobs to localStorage`)
+      localStorage.setItem(
+        'svtplay-dl-jobs',
+        JSON.stringify(jobs.value.map(sanitiseJobForStorage)),
+      )
     } catch (error) {
       console.error('Failed to persist jobs:', error)
     }
@@ -172,41 +128,9 @@ export const useDownloadStore = defineStore('download', () => {
   const currentOptions = ref<DownloadOptions>({
     url: '',
     subfolder: false,
-    force: false,
     listQuality: false,
-    streamPriority: ['dash', 'hls', 'http'],
-    formatPreferred: ['h264'],
-    subtitle: false,
-    mergeSubtitle: false,
-    forceSubtitle: false,
-    requireSubtitle: false,
-    allSubtitles: false,
-    rawSubtitles: false,
-    convertSubtitleColors: false,
-    live: false,
-    thumbnail: false,
-    getUrl: false,
-    getOnlyEpisodeUrl: false,
-    silent: false,
-    silentSemi: false,
-    verbose: false,
-    dontVerifySslCert: false,
-    httpHeaders: [],
-    cookies: [],
-    exclude: [],
     allEpisodes: false,
-    includeClips: false,
-    reverse: false,
-    onlyAudio: false,
-    onlyVideo: false,
-    nfo: false,
-    forceNfo: false,
-    noRemux: false,
-    noMerge: false,
-    noPostprocess: false,
-    keepOriginal: false,
     outputFormat: 'mp4',
-    chapters: false,
     username: undefined,
     password: undefined,
     token: undefined,
@@ -231,7 +155,7 @@ export const useDownloadStore = defineStore('download', () => {
   const initializeSocket = () => {
     if (socket.value) return
 
-    socket.value = io('http://localhost:3001', {
+    socket.value = io({
       autoConnect: true,
       transports: ['websocket', 'polling']
     })
@@ -485,74 +409,22 @@ export const useDownloadStore = defineStore('download', () => {
   const buildCommandArgs = (options: DownloadOptions): string[] => {
     const args: string[] = []
 
-    // Basic options
     if (options.output) args.push('-o', options.output)
-    if (options.filename) args.push('--filename', options.filename)
     if (options.subfolder) args.push('--subfolder')
-    if (options.force) args.push('-f')
 
-    // Authentication
     if (options.username) args.push('-u', options.username)
     if (options.password) args.push('-p', options.password)
     if (options.token) args.push('--token', options.token)
 
-    // Quality options
     if (options.quality) args.push('-q', options.quality)
-    if (options.flexibleQuality) args.push('-Q', options.flexibleQuality.toString())
-    if (options.preferred) args.push('-P', options.preferred)
     if (options.listQuality) args.push('--list-quality')
-    if (options.streamPriority.length > 0) args.push('--stream-priority', options.streamPriority.join(','))
-    if (options.formatPreferred.length > 0) args.push('--format-preferred', options.formatPreferred.join(','))
-    if (options.audioLanguage) args.push('--audio-language', options.audioLanguage)
-    if (options.videoRole) args.push('--video-role', options.videoRole)
-    if (options.resolution) args.push('--resolution', options.resolution)
 
-    // Subtitle options
-    if (options.subtitle) args.push('-S')
-    if (options.mergeSubtitle) args.push('-M')
-    if (options.forceSubtitle) args.push('--force-subtitle')
-    if (options.requireSubtitle) args.push('--require-subtitle')
-    if (options.allSubtitles) args.push('--all-subtitles')
-    if (options.rawSubtitles) args.push('--raw-subtitles')
-    if (options.convertSubtitleColors) args.push('--convert-subtitle-colors')
+    // Always download subtitles and merge them into the container.
+    args.push('-S', '-M')
 
-    // Download options
-    if (options.live) args.push('-l')
-    if (options.captureTime) args.push('-c', options.captureTime.toString())
-    if (options.thumbnail) args.push('-t')
-    if (options.getUrl) args.push('-g')
-    if (options.getOnlyEpisodeUrl) args.push('--get-only-episode-url')
-
-    // Advanced options
-    if (options.silent) args.push('-s')
-    if (options.silentSemi) args.push('--silent-semi')
-    if (options.verbose) args.push('-v')
-    if (options.dontVerifySslCert) args.push('--dont-verify-ssl-cert')
-    if (options.httpHeaders.length > 0) args.push('--http-header', options.httpHeaders.join(';'))
-    if (options.cookies.length > 0) args.push('--cookies', options.cookies.join(';'))
-    if (options.exclude.length > 0) args.push('--exclude', options.exclude.join(','))
-    if (options.afterDate) args.push('--after-date', options.afterDate)
-    if (options.proxy) args.push('--proxy', options.proxy)
-
-    // Content options
     if (options.allEpisodes) args.push('-A')
-    if (options.allLast) args.push('--all-last', options.allLast.toString())
-    if (options.includeClips) args.push('--include-clips')
-    if (options.reverse) args.push('-R')
 
-    // Output options
-    if (options.onlyAudio) args.push('--only-audio')
-    if (options.onlyVideo) args.push('--only-video')
-    if (options.nfo) args.push('--nfo')
-    if (options.forceNfo) args.push('--force-nfo')
-
-    // Post-processing
-    if (options.noRemux) args.push('--no-remux')
-    if (options.noMerge) args.push('--no-merge')
-    if (options.noPostprocess) args.push('--no-postprocess')
-    if (options.keepOriginal) args.push('--keep-original')
     if (options.outputFormat === 'mkv') args.push('--output-format', 'mkv')
-    if (options.chapters) args.push('--chapters')
 
     return args
   }

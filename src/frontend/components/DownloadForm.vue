@@ -6,7 +6,7 @@
         Add Download
       </h5>
     </div>
-    
+
     <div class="card-body">
       <form @submit.prevent="handleSubmit">
         <!-- URL Input -->
@@ -30,36 +30,6 @@
           <div class="col-md-6 mb-3">
             <div class="form-check">
               <input
-                id="subtitle"
-                v-model="downloadStore.currentOptions.subtitle"
-                type="checkbox"
-                class="form-check-input"
-              />
-              <label for="subtitle" class="form-check-label">
-                <i class="bi bi-chat-square-text me-1"></i>
-                Download subtitles
-              </label>
-            </div>
-          </div>
-          
-          <div class="col-md-6 mb-3">
-            <div class="form-check">
-              <input
-                id="thumbnail"
-                v-model="downloadStore.currentOptions.thumbnail"
-                type="checkbox"
-                class="form-check-input"
-              />
-              <label for="thumbnail" class="form-check-label">
-                <i class="bi bi-image me-1"></i>
-                Download thumbnail
-              </label>
-            </div>
-          </div>
-          
-          <div class="col-md-6 mb-3">
-            <div class="form-check">
-              <input
                 id="allEpisodes"
                 v-model="downloadStore.currentOptions.allEpisodes"
                 type="checkbox"
@@ -71,7 +41,7 @@
               </label>
             </div>
           </div>
-          
+
           <div class="col-md-6 mb-3">
             <div class="form-check">
               <input
@@ -116,6 +86,18 @@
                   placeholder="e.g. tv, movies"
                   class="form-control form-control-sm"
                 />
+              </div>
+              <div
+                v-if="
+                  downloadStore.currentOptions.autoPostUsenet &&
+                  usenetStore.tools &&
+                  !usenetStore.tools.rar
+                "
+                class="alert alert-warning small py-2 mt-3 mb-0"
+              >
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <strong>rar</strong> not found on the server — the upload will fail at
+                the archiving step. Open Settings for install steps.
               </div>
             </div>
           </div>
@@ -191,17 +173,39 @@
           </div>
         </div>
 
+        <!-- Username and Password (optional, for premium content) -->
+        <div class="row mb-4">
+          <div class="col-md-6 mb-3">
+            <label for="username" class="form-label fw-semibold">
+              <i class="bi bi-person me-1"></i>
+              Username <small class="text-muted">(optional)</small>
+            </label>
+            <input
+              id="username"
+              v-model="downloadStore.currentOptions.username"
+              type="text"
+              autocomplete="username"
+              class="form-control"
+            />
+          </div>
+
+          <div class="col-md-6 mb-3">
+            <label for="password" class="form-label fw-semibold">
+              <i class="bi bi-shield-lock me-1"></i>
+              Password <small class="text-muted">(optional)</small>
+            </label>
+            <input
+              id="password"
+              v-model="downloadStore.currentOptions.password"
+              type="password"
+              autocomplete="current-password"
+              class="form-control"
+            />
+          </div>
+        </div>
+
         <!-- Action Buttons -->
-        <div class="d-flex justify-content-between align-items-center">
-          <button
-            type="button"
-            @click="showAdvanced = !showAdvanced"
-            class="btn btn-outline-secondary btn-sm"
-          >
-            <i class="bi" :class="showAdvanced ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
-            {{ showAdvanced ? 'Hide' : 'Show' }} Advanced Options
-          </button>
-          
+        <div class="d-flex justify-content-end">
           <div class="btn-group">
             <button
               type="button"
@@ -212,7 +216,7 @@
               <i class="bi bi-list-check me-1"></i>
               List Quality
             </button>
-            
+
             <button
               type="submit"
               :disabled="!url || isSubmitting"
@@ -224,93 +228,12 @@
           </div>
         </div>
       </form>
-
-      <!-- Advanced Options -->
-      <div v-if="showAdvanced" class="mt-4 pt-4 border-top">
-        <h6 class="text-primary mb-3">
-          <i class="bi bi-gear me-1"></i>
-          Advanced Options
-        </h6>
-        
-        <div class="row">
-          <!-- Authentication Section -->
-          <div class="col-md-6">
-            <div class="card border-light">
-              <div class="card-body">
-                <h6 class="card-title text-secondary">
-                  <i class="bi bi-shield-lock me-1"></i>
-                  Authentication
-                </h6>
-                
-                <div class="mb-3">
-                  <label for="username" class="form-label">Username</label>
-                  <input
-                    id="username"
-                    v-model="downloadStore.currentOptions.username"
-                    type="text"
-                    class="form-control form-control-sm"
-                  />
-                </div>
-                
-                <div class="mb-3">
-                  <label for="password" class="form-label">Password</label>
-                  <input
-                    id="password"
-                    v-model="downloadStore.currentOptions.password"
-                    type="password"
-                    class="form-control form-control-sm"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Stream Options Section -->
-          <div class="col-md-6">
-            <div class="card border-light">
-              <div class="card-body">
-                <h6 class="card-title text-secondary">
-                  <i class="bi bi-broadcast me-1"></i>
-                  Stream Options
-                </h6>
-                
-                <div class="mb-3">
-                  <label for="preferred" class="form-label">Preferred Method</label>
-                  <select
-                    id="preferred"
-                    v-model="downloadStore.currentOptions.preferred"
-                    class="form-select form-select-sm"
-                  >
-                    <option value="">Auto</option>
-                    <option value="dash">DASH</option>
-                    <option value="hls">HLS</option>
-                    <option value="http">HTTP</option>
-                  </select>
-                </div>
-                
-                <div class="form-check">
-                  <input
-                    id="live"
-                    v-model="downloadStore.currentOptions.live"
-                    type="checkbox"
-                    class="form-check-input"
-                  />
-                  <label for="live" class="form-check-label">
-                    <i class="bi bi-broadcast-pin me-1"></i>
-                    Live stream
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useDownloadStore } from '../stores/downloadStore'
 import { useUsenetStore } from '../stores/usenetStore'
 
@@ -319,7 +242,15 @@ const usenetStore = useUsenetStore()
 
 const url = ref('')
 const isSubmitting = ref(false)
-const showAdvanced = ref(false)
+
+// Lazily warm tool availability so the rar-missing warning can render.
+watch(
+  () => usenetStore.enabled,
+  (enabled) => {
+    if (enabled) usenetStore.fetchTools()
+  },
+  { immediate: true },
+)
 
 const handleSubmit = async () => {
   if (!url.value) return

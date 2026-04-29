@@ -174,20 +174,6 @@
               <!-- Job Options Summary -->
               <div class="d-flex flex-wrap gap-1 mb-0" v-if="job.options">
                 <span
-                  v-if="job.options.subtitle"
-                  class="badge bg-info"
-                >
-                  <i class="bi bi-chat-square-text me-1"></i>
-                  Subtitles
-                </span>
-                <span
-                  v-if="job.options.thumbnail"
-                  class="badge bg-success"
-                >
-                  <i class="bi bi-image me-1"></i>
-                  Thumbnail
-                </span>
-                <span
                   v-if="job.options.allEpisodes"
                   class="badge bg-primary"
                 >

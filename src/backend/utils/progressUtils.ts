@@ -62,6 +62,21 @@ export class ValidationUtils {
       return { valid: false, error: 'Download ID is required' };
     }
 
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { valid: false, error: 'Invalid URL format' };
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { valid: false, error: 'URL must use http or https' };
+    }
+
+    if (!parsed.hostname) {
+      return { valid: false, error: 'URL must include a hostname' };
+    }
+
     return { valid: true };
   }
 }

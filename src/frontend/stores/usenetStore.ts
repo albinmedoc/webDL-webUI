@@ -42,6 +42,12 @@ export interface UsenetJob extends UsenetJobSummary {
   logs: string[]
 }
 
+export interface ToolAvailability {
+  rar: boolean
+  parpar: boolean
+  nyuu: boolean
+}
+
 const LOG_LIMIT = 200
 
 export const useUsenetStore = defineStore('usenet', () => {
@@ -50,6 +56,9 @@ export const useUsenetStore = defineStore('usenet', () => {
   const enabled = ref<boolean | null>(null)
   const lastError = ref<string | null>(null)
   const wired = ref(false)
+  const tools = ref<ToolAvailability | null>(null)
+  const toolsError = ref<string | null>(null)
+  const toolsLoading = ref(false)
 
   function findIndex(jobId: string): number {
     return jobs.value.findIndex((j) => j.id === jobId)
@@ -83,6 +92,21 @@ export const useUsenetStore = defineStore('usenet', () => {
       .catch(() => {
         enabled.value = false
       })
+  }
+
+  async function fetchTools(force = false): Promise<void> {
+    if (!force && tools.value) return
+    toolsLoading.value = true
+    toolsError.value = null
+    try {
+      const res = await fetch('/api/usenet/tools')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      tools.value = await res.json()
+    } catch (err) {
+      toolsError.value = (err as Error).message
+    } finally {
+      toolsLoading.value = false
+    }
   }
 
   function attachSocket(): void {
@@ -196,10 +220,14 @@ export const useUsenetStore = defineStore('usenet', () => {
     jobs,
     enabled,
     lastError,
+    tools,
+    toolsError,
+    toolsLoading,
     activeJobs,
     completedJobs,
     failedJobs,
     fetchHealth,
+    fetchTools,
     syncWithServer,
     cancel,
     retry,

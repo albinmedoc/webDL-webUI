@@ -15,6 +15,7 @@ import {
 import { logger } from '../utils/logger.js';
 
 import { checkDiskSpace } from './usenet/diskspace.js';
+import { removeNzbFile } from './usenet/nzbFiles.js';
 import { generatePassword } from './usenet/password.js';
 import { runPipeline, type PipelineEvents } from './usenet/pipeline.js';
 import { getWorkRoot } from './usenet/workspace.js';
@@ -266,6 +267,20 @@ export function retryJob(jobId: string): { retried: boolean; reason?: string } {
   // the right resume point.
   startJob(jobId);
   return { retried: true };
+}
+
+export async function deleteJob(
+  jobId: string,
+): Promise<{ deleted: boolean; reason?: string; state?: UsenetJobState }> {
+  const job = getJob(jobId);
+  if (!job) return { deleted: false, reason: 'not found' };
+  if (isActive(jobId)) return { deleted: false, reason: 'active', state: job.state };
+
+  if (job.nzbPath) await removeNzbFile(job.nzbPath);
+
+  getDb().delete(usenetJobs).where(eq(usenetJobs.id, jobId)).run();
+  logger.info('Usenet job deleted', { id: jobId });
+  return { deleted: true };
 }
 
 export function startupKick(): void {

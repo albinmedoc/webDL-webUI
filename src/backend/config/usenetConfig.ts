@@ -14,14 +14,21 @@ export interface UsenetConfig {
   subjectTemplate: string;
   nfoPath: string | null;
   nyuuExtraArgs: string[];
+  releaseGroup: string;
+  releaseNameTemplate: string;
 }
 
 export interface IndexerConfig {
   hookScript: string | null;
   nzbOutputDir: string;
+  // Days to keep NZB files on disk before the retention sweeper deletes them.
+  // 0 (the default) keeps them forever.
+  nzbRetentionDays: number;
 }
 
 const DEFAULT_SUBJECT_TEMPLATE = '[{filename}] - "{rarname}" yEnc ({part}/{total})';
+const DEFAULT_RELEASE_NAME_TEMPLATE = '{show}.S{season}E{episode}.{quality}.WEB-DL.h264-{group}';
+const DEFAULT_RELEASE_GROUP = 'SVTDL';
 
 function parseBool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback;
@@ -68,11 +75,14 @@ export const usenetConfig: UsenetConfig = {
   subjectTemplate: process.env.USENET_SUBJECT_TEMPLATE ?? DEFAULT_SUBJECT_TEMPLATE,
   nfoPath: process.env.USENET_NFO_PATH || null,
   nyuuExtraArgs: parseShellArgs(process.env.USENET_NYUU_EXTRA_ARGS),
+  releaseGroup: process.env.USENET_RELEASE_GROUP || DEFAULT_RELEASE_GROUP,
+  releaseNameTemplate: process.env.USENET_RELEASE_NAME_TEMPLATE || DEFAULT_RELEASE_NAME_TEMPLATE,
 };
 
 export const indexerConfig: IndexerConfig = {
   hookScript: process.env.INDEXER_HOOK_SCRIPT || null,
   nzbOutputDir: process.env.NZB_OUTPUT_DIR ?? './data/nzb',
+  nzbRetentionDays: Math.max(0, parseInt10(process.env.NZB_RETENTION_DAYS, 0)),
 };
 
 export interface UsenetConfigPublic {

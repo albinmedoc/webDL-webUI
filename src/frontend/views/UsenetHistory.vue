@@ -141,6 +141,15 @@
                     >
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
+                    <button
+                      v-if="isTerminal(job.state)"
+                      class="btn btn-outline-danger"
+                      :disabled="deletingId === job.id"
+                      @click="confirmDelete(job)"
+                      title="Delete job"
+                    >
+                      <i class="bi" :class="deletingId === job.id ? 'bi-arrow-clockwise' : 'bi-trash'"></i>
+                    </button>
                   </div>
                   <div v-if="passwordVisible[job.id]" class="mt-2">
                     <code v-if="passwordCache[job.id]" class="small">{{ passwordCache[job.id] }}</code>
@@ -212,6 +221,7 @@ const stateFilter = ref<UsenetState | ''>('')
 
 const passwordVisible = ref<Record<string, boolean>>({})
 const passwordCache = ref<Record<string, string>>({})
+const deletingId = ref<string | null>(null)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const rangeStart = computed(() => (total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1))
@@ -281,6 +291,37 @@ async function togglePassword(jobId: string): Promise<void> {
 function retry(job: UsenetJobSummary): void {
   usenetStore.retry(job.id)
   setTimeout(fetchHistory, 500)
+}
+
+async function confirmDelete(job: UsenetJobSummary): Promise<void> {
+  const lines = [
+    `Delete this Usenet job?`,
+    ``,
+    `File: ${basename(job.mediaPath)}`,
+    `State: ${job.state}`,
+  ]
+  if (job.nzbPath) {
+    lines.push('', 'The NZB file on disk will also be removed.')
+  }
+  if (!window.confirm(lines.join('\n'))) return
+
+  deletingId.value = job.id
+  errorMessage.value = null
+  try {
+    const res = await fetch(`/api/usenet/jobs/${job.id}`, { method: 'DELETE' })
+    if (res.status === 204) {
+      delete passwordVisible.value[job.id]
+      delete passwordCache.value[job.id]
+      await fetchHistory()
+      return
+    }
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  } catch (err) {
+    errorMessage.value = `Delete failed: ${(err as Error).message}`
+  } finally {
+    deletingId.value = null
+  }
 }
 
 function retryLabel(job: UsenetJobSummary): string {

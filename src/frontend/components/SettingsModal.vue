@@ -88,6 +88,49 @@
             Connectivity tests
           </h6>
 
+          <div class="mb-3">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <strong class="small text-muted">Tools:</strong>
+              <span v-if="usenetStore.toolsLoading" class="text-muted small">
+                <span class="spinner-border spinner-border-sm me-1"></span>checking…
+              </span>
+              <template v-else-if="usenetStore.tools">
+                <span
+                  v-for="tool in toolList"
+                  :key="tool.name"
+                  class="badge"
+                  :class="tool.present ? 'bg-success' : 'bg-danger'"
+                >
+                  <i class="bi me-1" :class="tool.present ? 'bi-check-circle' : 'bi-x-circle'"></i>
+                  {{ tool.name }}
+                </span>
+              </template>
+              <span v-else-if="usenetStore.toolsError" class="text-danger small">
+                {{ usenetStore.toolsError }}
+              </span>
+              <button
+                class="btn btn-link btn-sm p-0 ms-auto"
+                :disabled="usenetStore.toolsLoading"
+                @click="usenetStore.fetchTools(true)"
+              >
+                <i class="bi bi-arrow-clockwise"></i> Recheck
+              </button>
+            </div>
+            <div
+              v-if="usenetStore.tools && !usenetStore.tools.rar"
+              class="alert alert-warning small py-2 mt-2 mb-0"
+            >
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              <strong>rar</strong> not found on PATH. Usenet uploads will fail.
+              See the
+              <a
+                href="https://github.com/albinmedoc/webDL-webUI#rar-licensing"
+                target="_blank"
+                rel="noopener noreferrer"
+              >RAR licensing notes</a> for install steps.
+            </div>
+          </div>
+
           <div class="d-flex gap-2 flex-wrap mb-2">
             <button
               class="btn btn-outline-primary btn-sm"
@@ -138,7 +181,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useUsenetStore } from '../stores/usenetStore'
 
 interface UsenetConfigPublic {
   enabled: boolean
@@ -181,6 +225,18 @@ interface IndexerResult {
 }
 
 defineEmits<{ (e: 'close'): void }>()
+
+const usenetStore = useUsenetStore()
+
+const toolList = computed(() => {
+  const t = usenetStore.tools
+  if (!t) return []
+  return [
+    { name: 'rar', present: t.rar },
+    { name: 'parpar', present: t.parpar },
+    { name: 'nyuu', present: t.nyuu },
+  ]
+})
 
 const config = ref<UsenetConfigPublic | null>(null)
 const loading = ref(true)
@@ -232,7 +288,10 @@ async function testIndexer() {
   }
 }
 
-onMounted(loadConfig)
+onMounted(() => {
+  loadConfig()
+  usenetStore.fetchTools()
+})
 </script>
 
 <style scoped>

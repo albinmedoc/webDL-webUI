@@ -1,5 +1,5 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import { DownloadHandler, DownloadStartData, DownloadCancelData, DownloadSyncData } from '../handlers/downloadHandler.js';
+import { createDownloadHandler, DownloadStartData, DownloadCancelData, DownloadSyncData } from '../handlers/downloadHandler.js';
 import { UsenetHandler } from '../handlers/usenetHandler.js';
 import type {
   UsenetUploadStart,
@@ -21,7 +21,7 @@ export class SocketController {
       logger.info('Client connected', { socketId: socket.id });
 
       const usenetHandler = new UsenetHandler(socket);
-      const downloadHandler = new DownloadHandler(socket, usenetHandler);
+      const downloadHandler = createDownloadHandler(socket, usenetHandler);
 
       // Register all socket event handlers
       socket.on('start-download', (data: DownloadStartData) => {

@@ -1,12 +1,25 @@
 import { Socket } from 'socket.io';
+import { config } from '../config/config.js';
 import { usenetConfig } from '../config/usenetConfig.js';
-import downloadService from '../services/downloadService.js';
+import * as downloadService from '../services/downloadService.js';
 import * as outputTracker from '../services/outputTracker.js';
+import { applyReleaseNaming } from '../services/usenet/releaseNamer.js';
 import { ProgressParser, ValidationUtils } from '../utils/progressUtils.js';
 import { DownloadRequest } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { handleError } from '../utils/errors.js';
 import { UsenetHandler } from './usenetHandler.js';
+
+function extractQualityFromArgs(args: string[]): string | null {
+  for (let i = 0; i < args.length - 1; i++) {
+    if (args[i] === '-q') return args[i + 1] ?? null;
+  }
+  return null;
+}
+
+function hasOutputFlag(args: string[]): boolean {
+  return args.some(arg => arg === '-o' || arg === '--output');
+}
 
 export interface DownloadStartData extends DownloadRequest {
   args: string[];
@@ -20,85 +33,97 @@ export interface DownloadSyncData {
   downloadIds: string[];
 }
 
-export class DownloadHandler {
-  private socket: Socket;
-  private usenetHandler: UsenetHandler;
+export interface DownloadHandler {
+  handleStartDownload(data: DownloadStartData): Promise<void>;
+  handleCancelDownload(data: DownloadCancelData): void;
+  handleSyncDownloads(data: DownloadSyncData): void;
+  handleHealthCheck(): void;
+  handleCheckSvtplayDl(): Promise<void>;
+}
 
-  constructor(socket: Socket, usenetHandler: UsenetHandler) {
-    this.socket = socket;
-    this.usenetHandler = usenetHandler;
+export function createDownloadHandler(socket: Socket, usenetHandler: UsenetHandler): DownloadHandler {
+  function handleProgressData(chunk: string, downloadId: string, output: string): void {
+    const { progress, eta, status } = ProgressParser.parseProgress(chunk);
+
+    if (ProgressParser.isSignificantChunk(chunk, progress)) {
+      socket.emit('download-progress', {
+        downloadId,
+        chunk: chunk.trim(),
+        output: output.trim(),
+        progress,
+        eta,
+        status,
+      });
+    }
   }
 
-  async handleStartDownload(data: DownloadStartData): Promise<void> {
+  async function handleStartDownload(data: DownloadStartData): Promise<void> {
     try {
       const validation = ValidationUtils.validateDownloadRequest(data);
       if (!validation.valid) {
         logger.warn('Download validation failed', { downloadId: data.downloadId, error: validation.error });
-        this.socket.emit('download-error', { 
-          downloadId: data.downloadId, 
-          error: validation.error 
+        socket.emit('download-error', {
+          downloadId: data.downloadId,
+          error: validation.error,
         });
         return;
       }
 
-      const { url, args, downloadId } = data;
+      const { url, downloadId } = data;
+      const args = hasOutputFlag(data.args)
+        ? data.args
+        : [...data.args, '-o', config.downloadOutputDir];
       logger.info('Starting download', { downloadId, url });
 
       await outputTracker.beforeStart(downloadId, args);
 
       const downloadInfo = downloadService.startDownload(url, args, downloadId);
-      const { process, command } = downloadInfo;
+      const { process: proc, command } = downloadInfo;
 
-      // Emit download started
-      this.socket.emit('download-started', {
+      socket.emit('download-started', {
         downloadId,
         command,
-        url
+        url,
       });
 
       let output = '';
       let errorOutput = '';
 
-      // Handle stdout data
-      process.stdout?.on('data', (data: Buffer) => {
+      proc.stdout?.on('data', (data: Buffer) => {
         const chunk = data.toString();
         output += chunk;
-        this.handleProgressData(chunk, downloadId, output);
+        handleProgressData(chunk, downloadId, output);
       });
 
-      // Handle stderr data
-      process.stderr?.on('data', (data: Buffer) => {
+      proc.stderr?.on('data', (data: Buffer) => {
         const chunk = data.toString();
-        
+
         if (ProgressParser.isProgressData(chunk)) {
-          // Treat stderr progress data the same as stdout progress data
           output += chunk;
-          this.handleProgressData(chunk, downloadId, output);
+          handleProgressData(chunk, downloadId, output);
         } else {
-          // This is an actual error message
           errorOutput += chunk;
-          this.socket.emit('download-progress', {
+          socket.emit('download-progress', {
             downloadId,
             chunk: chunk.trim(),
-            error: true
+            error: true,
           });
         }
       });
 
-      // Handle process completion
-      process.on('close', async (code: number | null) => {
+      proc.on('close', async (code: number | null) => {
         downloadService.removeDownload(downloadId);
 
         if (code === 0) {
           const tracked = await outputTracker.afterComplete(downloadId);
           if (tracked && tracked.files.length > 0) {
-            this.socket.emit('download-files', {
+            socket.emit('download-files', {
               downloadId,
               outputDir: tracked.outputDir,
               files: tracked.files,
             });
           }
-          this.socket.emit('download-completed', {
+          socket.emit('download-completed', {
             downloadId,
             success: true,
             output: output.trim(),
@@ -108,9 +133,11 @@ export class DownloadHandler {
           });
 
           if (data.autoPostUsenet && usenetConfig.enabled && tracked && tracked.files.length > 0) {
+            const quality = extractQualityFromArgs(data.args);
             for (const file of tracked.files) {
-              await this.usenetHandler.handleStartUpload({
-                mediaPath: file.path,
+              const mediaPath = await applyReleaseNaming(file.path, { quality });
+              await usenetHandler.handleStartUpload({
+                mediaPath,
                 downloadId,
                 category: data.usenetCategory ?? null,
               });
@@ -120,23 +147,22 @@ export class DownloadHandler {
           }
         } else {
           outputTracker.discard(downloadId);
-          this.socket.emit('download-completed', {
+          socket.emit('download-completed', {
             downloadId,
             success: false,
             error: errorOutput || `Process exited with code ${code}`,
-            output: output.trim()
+            output: output.trim(),
           });
         }
       });
 
-      // Handle process errors
-      process.on('error', (error: Error) => {
+      proc.on('error', (error: Error) => {
         logger.error('Process error', { downloadId, error: error.message });
         downloadService.removeDownload(downloadId);
         outputTracker.discard(downloadId);
-        this.socket.emit('download-error', {
+        socket.emit('download-error', {
           downloadId,
-          error: `Failed to start svtplay-dl: ${error.message}`
+          error: `Failed to start svtplay-dl: ${error.message}`,
         });
       });
 
@@ -144,64 +170,55 @@ export class DownloadHandler {
       logger.error('Download error', { downloadId: data.downloadId, error });
       outputTracker.discard(data.downloadId);
       const errorInfo = handleError(error instanceof Error ? error : new Error('Unknown error'));
-      this.socket.emit('download-error', {
+      socket.emit('download-error', {
         downloadId: data.downloadId,
-        error: errorInfo.message
+        error: errorInfo.message,
       });
     }
   }
 
-  private handleProgressData(chunk: string, downloadId: string, output: string): void {
-    const { progress, eta, status } = ProgressParser.parseProgress(chunk);
-    
-    if (ProgressParser.isSignificantChunk(chunk, progress)) {
-      this.socket.emit('download-progress', {
-        downloadId,
-        chunk: chunk.trim(),
-        output: output.trim(),
-        progress,
-        eta,
-        status
-      });
-    }
-  }
-
-  handleCancelDownload(data: DownloadCancelData): void {
+  function handleCancelDownload(data: DownloadCancelData): void {
     const { downloadId } = data;
     const cancelled = downloadService.cancelDownload(downloadId);
-    
+
     if (cancelled) {
-      this.socket.emit('download-cancelled', { downloadId });
+      socket.emit('download-cancelled', { downloadId });
     }
   }
 
-  handleSyncDownloads(data: DownloadSyncData): void {
+  function handleSyncDownloads(data: DownloadSyncData): void {
     const { downloadIds } = data;
-    
+
     downloadIds.forEach(downloadId => {
       if (downloadService.isDownloadActive(downloadId)) {
-        // Download is still active on server
-        this.socket.emit('download-sync', {
+        socket.emit('download-sync', {
           downloadId,
           status: 'downloading',
-          progress: null // Will be updated by next progress event
+          progress: null,
         });
       } else {
-        // Download not found on server
-        this.socket.emit('download-not-found', { downloadId });
+        socket.emit('download-not-found', { downloadId });
       }
     });
   }
 
-  handleHealthCheck(): void {
-    this.socket.emit('health-status', { 
-      status: 'ok', 
-      timestamp: new Date().toISOString() 
+  function handleHealthCheck(): void {
+    socket.emit('health-status', {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
     });
   }
 
-  async handleCheckSvtplayDl(): Promise<void> {
+  async function handleCheckSvtplayDl(): Promise<void> {
     const status = await downloadService.checkSvtplayDlAvailability();
-    this.socket.emit('svtplay-dl-status', status);
+    socket.emit('svtplay-dl-status', status);
   }
+
+  return {
+    handleStartDownload,
+    handleCancelDownload,
+    handleSyncDownloads,
+    handleHealthCheck,
+    handleCheckSvtplayDl,
+  };
 }

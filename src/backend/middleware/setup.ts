@@ -7,7 +7,8 @@ import { getPublicConfig, usenetConfig, indexerConfig } from '../config/usenetCo
 import { USENET_JOB_STATES, type UsenetJobState } from '../db/schema.js';
 import { runHookCheck } from '../services/usenet/indexer.js';
 import { probeNntp } from '../services/usenet/nntpProbe.js';
-import { getJob, listJobsPaginated } from '../services/usenetService.js';
+import { detectTools } from '../services/usenet/tools.js';
+import { deleteJob, getJob, listJobsPaginated } from '../services/usenetService.js';
 import { logger } from '../utils/logger.js';
 
 export function setupMiddleware(app: Application, rootDir: string): void {
@@ -35,6 +36,11 @@ export function setupRoutes(app: Application, rootDir: string): void {
 
   app.get('/api/usenet/config', (_req: Request, res: Response) => {
     res.json(getPublicConfig());
+  });
+
+  app.get('/api/usenet/tools', async (_req: Request, res: Response) => {
+    const tools = await detectTools();
+    res.json(tools);
   });
 
   app.post('/api/usenet/test/nntp', async (_req: Request, res: Response) => {
@@ -103,6 +109,27 @@ export function setupRoutes(app: Application, rootDir: string): void {
       return;
     }
     res.json(job);
+  });
+
+  app.delete('/api/usenet/jobs/:id', async (req: Request, res: Response) => {
+    if (!usenetConfig.enabled) {
+      res.status(404).json({ error: 'Usenet feature is disabled' });
+      return;
+    }
+    const result = await deleteJob(req.params.id);
+    if (result.deleted) {
+      res.status(204).end();
+      return;
+    }
+    if (result.reason === 'not found') {
+      res.status(404).json({ error: 'job not found' });
+      return;
+    }
+    if (result.reason === 'active') {
+      res.status(409).json({ error: 'job is currently active', state: result.state });
+      return;
+    }
+    res.status(500).json({ error: result.reason ?? 'unknown error' });
   });
 
   app.get('/api/usenet/jobs/:id/nzb', (req: Request, res: Response) => {
