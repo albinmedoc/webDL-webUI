@@ -20,26 +20,39 @@
             </RouterLink>
           </li>
         </ul>
-        <div class="navbar-nav ms-auto">
+        <div class="navbar-nav ms-auto d-flex align-items-center gap-3">
           <span class="navbar-text">
             <i class="bi bi-activity me-1"></i>
             Active downloads: <span class="badge bg-light text-primary">{{ downloadStore.activeJobs.length }}</span>
           </span>
+          <button
+            v-if="usenetStore.enabled"
+            class="btn btn-sm btn-outline-light"
+            @click="settingsOpen = true"
+            title="Usenet settings"
+          >
+            <i class="bi bi-gear"></i>
+          </button>
         </div>
       </div>
     </nav>
 
     <RouterView />
+
+    <SettingsModal v-if="settingsOpen" @close="settingsOpen = false" />
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 import { useDownloadStore } from './stores/downloadStore'
 import { useUsenetStore } from './stores/usenetStore'
+import SettingsModal from './components/SettingsModal.vue'
 
 const downloadStore = useDownloadStore()
 const usenetStore = useUsenetStore()
+const settingsOpen = ref(false)
 </script>
 
 <style scoped>

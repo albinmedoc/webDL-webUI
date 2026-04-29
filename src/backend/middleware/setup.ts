@@ -3,8 +3,10 @@ import express, { Application, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 
-import { usenetConfig } from '../config/usenetConfig.js';
+import { getPublicConfig, usenetConfig, indexerConfig } from '../config/usenetConfig.js';
 import { USENET_JOB_STATES, type UsenetJobState } from '../db/schema.js';
+import { runHookCheck } from '../services/usenet/indexer.js';
+import { probeNntp } from '../services/usenet/nntpProbe.js';
 import { getJob, listJobsPaginated } from '../services/usenetService.js';
 import { logger } from '../utils/logger.js';
 
@@ -29,6 +31,42 @@ export function setupRoutes(app: Application, rootDir: string): void {
       version: process.env.npm_package_version || '0.0.0',
       usenetEnabled: usenetConfig.enabled,
     });
+  });
+
+  app.get('/api/usenet/config', (_req: Request, res: Response) => {
+    res.json(getPublicConfig());
+  });
+
+  app.post('/api/usenet/test/nntp', async (_req: Request, res: Response) => {
+    if (!usenetConfig.enabled) {
+      res.status(404).json({ error: 'Usenet feature is disabled' });
+      return;
+    }
+    const result = await probeNntp(usenetConfig);
+    res.json(result);
+  });
+
+  app.post('/api/usenet/test/indexer', async (_req: Request, res: Response) => {
+    if (!usenetConfig.enabled) {
+      res.status(404).json({ error: 'Usenet feature is disabled' });
+      return;
+    }
+    if (!indexerConfig.hookScript) {
+      res.json({ ok: false, error: 'INDEXER_HOOK_SCRIPT is not configured' });
+      return;
+    }
+    try {
+      const result = await runHookCheck();
+      res.json({
+        ok: result.ok,
+        exitCode: result.exitCode,
+        signal: result.signal,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      });
+    } catch (err) {
+      res.json({ ok: false, error: (err as Error).message });
+    }
   });
 
   app.get('/api/usenet/history', (req: Request, res: Response) => {
