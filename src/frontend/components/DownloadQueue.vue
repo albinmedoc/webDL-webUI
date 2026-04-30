@@ -145,6 +145,33 @@
                 <i class="bi bi-check-circle me-1"></i>
                 <small>Download completed successfully</small>
               </div>
+
+              <!-- Files (with Post-to-Usenet) -->
+              <div
+                v-if="job.status === 'completed' && job.files && job.files.length > 0"
+                class="mb-2"
+              >
+                <div
+                  v-for="file in job.files"
+                  :key="file.path"
+                  class="d-flex align-items-center justify-content-between gap-2 p-2 bg-light rounded mb-1"
+                >
+                  <div class="small text-truncate" :title="file.path">
+                    <i class="bi bi-file-earmark-play me-1"></i>
+                    {{ basename(file.path) }}
+                  </div>
+                  <button
+                    v-if="usenetStore.enabled"
+                    @click="postFile(job.id, file.path)"
+                    :disabled="postedFiles.has(file.path)"
+                    class="btn btn-outline-info btn-sm flex-shrink-0"
+                    title="Enqueue this file for Usenet upload"
+                  >
+                    <i class="bi bi-cloud-upload me-1"></i>
+                    {{ postedFiles.has(file.path) ? 'Queued' : 'Post to Usenet' }}
+                  </button>
+                </div>
+              </div>
               
               <div v-if="job.error" class="alert alert-danger alert-sm p-2 mb-2">
                 <i class="bi bi-exclamation-triangle me-1"></i>
@@ -264,10 +291,24 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useDownloadStore } from '../stores/downloadStore'
+import { useUsenetStore } from '../stores/usenetStore'
 
 const downloadStore = useDownloadStore()
+const usenetStore = useUsenetStore()
 const expandedLogs = ref<Record<string, boolean>>({})
 const showDropdown = ref(false)
+const postedFiles = ref<Set<string>>(new Set())
+
+const postFile = (jobId: string, filePath: string) => {
+  downloadStore.postToUsenet(jobId, filePath)
+  postedFiles.value.add(filePath)
+}
+
+const basename = (p: string): string => {
+  if (!p) return ''
+  const parts = p.split(/[\\/]/)
+  return parts[parts.length - 1] || p
+}
 
 const hasPersistedJobs = computed(() => {
   return downloadStore.jobs.length > 0

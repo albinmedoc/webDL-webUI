@@ -3,8 +3,6 @@ import { config } from '../config/config.js';
 import { usenetConfig } from '../config/usenetConfig.js';
 import * as downloadService from '../services/downloadService.js';
 import * as outputTracker from '../services/outputTracker.js';
-import path from 'path';
-import { applyReleaseNaming, detectNewznabCategory } from '../services/usenet/releaseNamer.js';
 import { ProgressParser, ValidationUtils } from '../utils/progressUtils.js';
 import { DownloadRequest } from '../types/index.js';
 import { logger } from '../utils/logger.js';
@@ -12,8 +10,10 @@ import { handleError } from '../utils/errors.js';
 import { UsenetHandler } from './usenetHandler.js';
 
 function extractQualityFromArgs(args: string[]): string | null {
+  // svtplay-dl uses --resolution (height in px) for quality selection. The
+  // releaseNamer appends "p" to the value to form tokens like "1080p".
   for (let i = 0; i < args.length - 1; i++) {
-    if (args[i] === '-q') return args[i + 1] ?? null;
+    if (args[i] === '--resolution') return args[i + 1] ?? null;
   }
   return null;
 }
@@ -136,15 +136,11 @@ export function createDownloadHandler(socket: Socket, usenetHandler: UsenetHandl
           if (data.autoPostUsenet && usenetConfig.enabled && tracked && tracked.files.length > 0) {
             const quality = extractQualityFromArgs(data.args);
             for (const file of tracked.files) {
-              // Detect Newznab category from the original filename — applyReleaseNaming
-              // strips the {date} token for dated daily shows, which would otherwise
-              // make them look like movies after rename.
-              const category = detectNewznabCategory(path.basename(file.path));
-              const mediaPath = await applyReleaseNaming(file.path, { quality });
               await usenetHandler.handleStartUpload({
-                mediaPath,
+                mediaPath: file.path,
                 downloadId,
-                category,
+                quality,
+                applyNaming: true,
               });
             }
           } else if (data.autoPostUsenet && !usenetConfig.enabled) {

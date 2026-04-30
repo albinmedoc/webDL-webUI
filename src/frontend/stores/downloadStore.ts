@@ -29,6 +29,11 @@ export interface ProbeState {
   error: string | null
 }
 
+export interface DownloadFile {
+  path: string
+  size: number
+}
+
 export interface DownloadJob {
   id: string
   url: string
@@ -40,6 +45,10 @@ export interface DownloadJob {
   startTime?: Date
   endTime?: Date
   logs: string[]
+  // Populated on download-completed (success). Absolute server-side paths;
+  // used by the "Post to Usenet" button to enqueue an upload.
+  outputDir?: string
+  files?: DownloadFile[]
 }
 
 export interface ServerStatus {
@@ -70,6 +79,9 @@ export const useDownloadStore = defineStore('download', () => {
     startTime: job.startTime,
     endTime: job.endTime,
     logs: job.logs,
+    outputDir: job.outputDir,
+    files: job.files,
+    resolution: job.options?.resolution,
   })
 
   // Load persisted jobs from localStorage on store initialization
@@ -88,7 +100,9 @@ export const useDownloadStore = defineStore('download', () => {
         startTime: job.startTime ? new Date(job.startTime) : undefined,
         endTime: job.endTime ? new Date(job.endTime) : undefined,
         logs: [...(job.logs || []), 'Job restored from previous session'],
-        options: { url: job.url ?? '', allEpisodes: false },
+        options: { url: job.url ?? '', allEpisodes: false, resolution: job.resolution },
+        outputDir: job.outputDir,
+        files: Array.isArray(job.files) ? job.files : undefined,
       }))
     } catch (error) {
       console.error('Failed to load persisted jobs:', error)
@@ -278,6 +292,8 @@ export const useDownloadStore = defineStore('download', () => {
           endTime: new Date(),
           output: data.success ? data.output : job.output,
           error: data.success ? job.error : data.error,
+          outputDir: data.success ? data.outputDir ?? job.outputDir : job.outputDir,
+          files: data.success && Array.isArray(data.files) ? data.files : job.files,
           logs: [
             ...job.logs,
             data.success ? 'Download completed successfully' : `Error: ${data.error}`
@@ -458,6 +474,21 @@ export const useDownloadStore = defineStore('download', () => {
     socket.value.emit('cancel-download', { downloadId: jobId })
   }
 
+  // Manually enqueue a Usenet upload for an already-downloaded file. Mirrors
+  // auto-post: the backend applies release naming and detects the Newznab
+  // category from the filename when applyNaming=true.
+  const postToUsenet = (jobId: string, filePath: string) => {
+    if (!socket.value?.connected) return
+    const job = jobs.value.find((j: DownloadJob) => j.id === jobId)
+    const quality = job?.options?.resolution
+    socket.value.emit('start-usenet-upload', {
+      mediaPath: filePath,
+      downloadId: jobId,
+      quality: quality !== undefined ? String(quality) : null,
+      applyNaming: true,
+    })
+  }
+
   const checkSvtplayDl = () => {
     if (!socket.value?.connected) return
     socket.value.emit('check-svtplay-dl')
@@ -550,6 +581,7 @@ export const useDownloadStore = defineStore('download', () => {
     addDownloadJob,
     startDownload,
     cancelDownload,
+    postToUsenet,
     removeJob,
     clearCompletedJobs,
     clearOldJobs,

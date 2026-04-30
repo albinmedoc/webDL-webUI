@@ -76,6 +76,8 @@ export interface UsenetUploadStart {
   mediaPath: string;
   downloadId?: string | null;
   category?: string | null;
+  quality?: string | null;
+  applyNaming?: boolean;
 }
 
 export interface UsenetUploadCancel {

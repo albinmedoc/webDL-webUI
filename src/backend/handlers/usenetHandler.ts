@@ -1,3 +1,4 @@
+import path from 'path';
 import type { Socket } from 'socket.io';
 
 import { usenetConfig } from '../config/usenetConfig.js';
@@ -11,6 +12,7 @@ import {
   subscribe,
   type JobObserver,
 } from '../services/usenetService.js';
+import { applyReleaseNaming, detectNewznabCategory } from '../services/usenet/releaseNamer.js';
 import type {
   UsenetJobSummary,
   UsenetUploadCancel,
@@ -98,10 +100,16 @@ export class UsenetHandler {
     }
 
     try {
+      let mediaPath = data.mediaPath;
+      let category = data.category ?? null;
+      if (data.applyNaming) {
+        category = category ?? detectNewznabCategory(path.basename(mediaPath));
+        mediaPath = await applyReleaseNaming(mediaPath, { quality: data.quality ?? null });
+      }
       const job = await enqueueJob({
-        mediaPath: data.mediaPath,
+        mediaPath,
         downloadId: data.downloadId ?? null,
-        category: data.category ?? null,
+        category,
       });
       this.socket.emit('usenet-enqueued', { job: toSummary(job) });
     } catch (err) {
