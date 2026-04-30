@@ -181,16 +181,10 @@
                   All Episodes
                 </span>
                 <span
-                  v-if="job.options.quality"
+                  v-if="job.options.resolution"
                   class="badge bg-secondary"
                 >
-                  {{ job.options.quality }}p
-                </span>
-                <span
-                  v-if="job.options.outputFormat === 'mkv'"
-                  class="badge bg-warning text-dark"
-                >
-                  MKV
+                  {{ job.options.resolution }}p
                 </span>
                 <span
                   v-if="job.options.token"

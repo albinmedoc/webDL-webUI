@@ -11,6 +11,7 @@ import {
   listSettings,
   updateSettings,
 } from '../services/settingsService.js';
+import { probeQualities } from '../services/qualityProbe.js';
 import { runHookCheck } from '../services/usenet/indexer.js';
 import { probeNntp } from '../services/usenet/nntpProbe.js';
 import { detectTools } from '../services/usenet/tools.js';
@@ -71,6 +72,22 @@ export function setupRoutes(app: Application, rootDir: string): void {
   app.get('/api/usenet/tools', async (_req: Request, res: Response) => {
     const tools = await detectTools();
     res.json(tools);
+  });
+
+  app.get('/api/probe', async (req: Request, res: Response) => {
+    const url = typeof req.query.url === 'string' ? req.query.url : '';
+    try {
+      new URL(url);
+    } catch {
+      res.status(400).json({ error: 'valid url query parameter required' });
+      return;
+    }
+    try {
+      const result = await probeQualities(url);
+      res.json(result);
+    } catch (err) {
+      res.status(502).json({ error: (err as Error).message });
+    }
   });
 
   app.post('/api/usenet/test/nntp', async (_req: Request, res: Response) => {

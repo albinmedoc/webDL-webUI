@@ -76,7 +76,7 @@ export const REGISTRY = defineRegistry({
   nzbRetentionDays:      { key: 'nzbRetentionDays',      envVar: 'NZB_RETENTION_DAYS',              group: 'indexer',    kind: 'integer', default: 0                                      },
 
   // svtplay-dl download output dir
-  downloadOutputDir:     { key: 'downloadOutputDir',     envVar: 'DOWNLOAD_OUTPUT_DIR',             group: 'download',   kind: 'string',  default: '/app/downloads'                       },
+  downloadOutputDir:     { key: 'downloadOutputDir',     envVar: 'DOWNLOAD_OUTPUT_DIR',             group: 'download',   kind: 'string',  default: '/data/downloads'                      },
 });
 
 export type RegistryKey = keyof typeof REGISTRY;

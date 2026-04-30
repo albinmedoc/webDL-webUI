@@ -54,10 +54,11 @@ COPY src/backend ./src/backend
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# /data is intended to be a volume — DB, work area, NZB output all live here.
-RUN mkdir -p /app/downloads /data /data/work /data/nzb
+# /data is intended to be a volume — DB, downloads, work area, NZB output all live here.
+RUN mkdir -p /data /data/downloads /data/work /data/nzb
 
 ENV DB_PATH=/data/svtplay-dl-webui.db \
+    DOWNLOAD_OUTPUT_DIR=/data/downloads \
     USENET_WORK_DIR=/data/work \
     NZB_OUTPUT_DIR=/data/nzb \
     PORT=3001 \

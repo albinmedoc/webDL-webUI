@@ -18,6 +18,7 @@
           <input
             id="url"
             v-model="url"
+            @blur="onUrlBlur"
             type="url"
             required
             placeholder="https://www.svtplay.se/video/..."
@@ -25,36 +26,67 @@
           />
         </div>
 
-        <!-- Quick Options -->
-        <div class="row mb-4">
-          <div class="col-md-6 mb-3">
-            <div class="form-check">
+        <!-- Quality (auto-probed) -->
+        <div class="mb-4">
+          <label class="form-label fw-semibold d-flex align-items-center">
+            <i class="bi bi-camera-video me-1"></i>
+            Quality
+            <span v-if="downloadStore.probe.loading" class="ms-2 small text-muted">
+              <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+              Probing…
+            </span>
+          </label>
+
+          <div v-if="downloadStore.probe.error" class="alert alert-warning small py-2 mb-2">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Could not list qualities: {{ downloadStore.probe.error }}. Submitting will
+            download the best available stream.
+          </div>
+
+          <div v-if="availableHeights.length > 0" class="d-flex flex-wrap gap-2">
+            <div
+              v-for="height in availableHeights"
+              :key="height"
+              class="form-check form-check-inline"
+            >
               <input
-                id="allEpisodes"
-                v-model="downloadStore.currentOptions.allEpisodes"
+                :id="`q-${height}`"
                 type="checkbox"
                 class="form-check-input"
+                :value="height"
+                v-model="downloadStore.selectedResolutions"
               />
-              <label for="allEpisodes" class="form-check-label">
-                <i class="bi bi-collection-play me-1"></i>
-                Download all episodes
+              <label :for="`q-${height}`" class="form-check-label">
+                {{ height }}p
               </label>
+            </div>
+            <div class="form-text w-100">
+              Tick none → best available. Tick multiple → one download per quality.
             </div>
           </div>
 
-          <div class="col-md-6 mb-3">
-            <div class="form-check">
-              <input
-                id="subfolder"
-                v-model="downloadStore.currentOptions.subfolder"
-                type="checkbox"
-                class="form-check-input"
-              />
-              <label for="subfolder" class="form-check-label">
-                <i class="bi bi-folder-plus me-1"></i>
-                Create subfolder
-              </label>
-            </div>
+          <div
+            v-else-if="!downloadStore.probe.loading && !downloadStore.probe.error"
+            class="form-text"
+          >
+            Paste a video URL to load available qualities. Submitting without a probe
+            downloads the best available stream.
+          </div>
+        </div>
+
+        <!-- Episodes -->
+        <div class="mb-4">
+          <div class="form-check">
+            <input
+              id="allEpisodes"
+              v-model="downloadStore.currentOptions.allEpisodes"
+              type="checkbox"
+              class="form-check-input"
+            />
+            <label for="allEpisodes" class="form-check-label">
+              <i class="bi bi-collection-play me-1"></i>
+              Download all episodes
+            </label>
           </div>
         </div>
 
@@ -90,73 +122,21 @@
           </div>
         </div>
 
-        <!-- Quality and Format Selection -->
-        <div class="row mb-4">
-          <div class="col-md-6 mb-3">
-            <label for="quality" class="form-label fw-semibold">
-              <i class="bi bi-camera-video me-1"></i>
-              Quality
-            </label>
-            <select
-              id="quality"
-              v-model="downloadStore.currentOptions.quality"
-              class="form-select"
-            >
-              <option value="">Best available</option>
-              <option value="720">720p</option>
-              <option value="1080">1080p</option>
-              <option value="480">480p</option>
-              <option value="360">360p</option>
-            </select>
-          </div>
-
-          <div class="col-md-6 mb-3">
-            <label for="outputFormat" class="form-label fw-semibold">
-              <i class="bi bi-file-earmark-code me-1"></i>
-              Output Format
-            </label>
-            <select
-              id="outputFormat"
-              v-model="downloadStore.currentOptions.outputFormat"
-              class="form-select"
-            >
-              <option value="mp4">MP4</option>
-              <option value="mkv">MKV</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Output Directory and Token -->
-        <div class="row mb-4">
-          <div class="col-md-6 mb-3">
-            <label for="output" class="form-label fw-semibold">
-              <i class="bi bi-folder me-1"></i>
-              Output Directory <small class="text-muted">(optional)</small>
-            </label>
-            <input
-              id="output"
-              v-model="downloadStore.currentOptions.output"
-              type="text"
-              placeholder="/path/to/downloads"
-              class="form-control"
-            />
-          </div>
-
-          <div class="col-md-6 mb-3">
-            <label for="token" class="form-label fw-semibold">
-              <i class="bi bi-key me-1"></i>
-              Token <small class="text-muted">(optional)</small>
-            </label>
-            <input
-              id="token"
-              v-model="downloadStore.currentOptions.token"
-              type="password"
-              placeholder="Authentication token"
-              class="form-control"
-            />
-            <div class="form-text">
-              Authentication token for services that require it
-            </div>
+        <!-- Token -->
+        <div class="mb-4">
+          <label for="token" class="form-label fw-semibold">
+            <i class="bi bi-key me-1"></i>
+            Token <small class="text-muted">(optional)</small>
+          </label>
+          <input
+            id="token"
+            v-model="downloadStore.currentOptions.token"
+            type="password"
+            placeholder="Authentication token"
+            class="form-control"
+          />
+          <div class="form-text">
+            Authentication token for services that require it
           </div>
         </div>
 
@@ -193,26 +173,14 @@
 
         <!-- Action Buttons -->
         <div class="d-flex justify-content-end">
-          <div class="btn-group">
-            <button
-              type="button"
-              @click="listQuality"
-              :disabled="!url || isSubmitting"
-              class="btn btn-outline-primary"
-            >
-              <i class="bi bi-list-check me-1"></i>
-              List Quality
-            </button>
-
-            <button
-              type="submit"
-              :disabled="!url || isSubmitting"
-              class="btn btn-primary"
-            >
-              <i class="bi" :class="isSubmitting ? 'bi-arrow-clockwise' : 'bi-download'"></i>
-              {{ isSubmitting ? 'Adding...' : 'Add Download' }}
-            </button>
-          </div>
+          <button
+            type="submit"
+            :disabled="!url || isSubmitting"
+            class="btn btn-primary"
+          >
+            <i class="bi" :class="isSubmitting ? 'bi-arrow-clockwise' : 'bi-download'"></i>
+            {{ isSubmitting ? 'Adding...' : 'Add Download' }}
+          </button>
         </div>
       </form>
     </div>
@@ -220,7 +188,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useDownloadStore } from '../stores/downloadStore'
 import { useUsenetStore } from '../stores/usenetStore'
 
@@ -229,6 +197,8 @@ const usenetStore = useUsenetStore()
 
 const url = ref('')
 const isSubmitting = ref(false)
+
+const availableHeights = computed(() => downloadStore.probe.heights ?? [])
 
 // Lazily warm tool availability so the rar-missing warning can render.
 watch(
@@ -239,30 +209,28 @@ watch(
   { immediate: true },
 )
 
+// Reset probe state whenever the user edits the URL away from the probed one.
+watch(url, (next) => {
+  if (downloadStore.probe.url && downloadStore.probe.url !== next) {
+    downloadStore.resetProbe()
+  }
+})
+
+const onUrlBlur = () => {
+  if (!url.value) return
+  void downloadStore.probeUrl(url.value)
+}
+
 const handleSubmit = async () => {
   if (!url.value) return
 
   isSubmitting.value = true
   try {
     await downloadStore.addDownloadJob(url.value)
-    url.value = '' // Clear the URL after successful submission
+    url.value = ''
+    downloadStore.resetProbe()
   } catch (error) {
     console.error('Failed to add download:', error)
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-const listQuality = async () => {
-  if (!url.value) return
-
-  isSubmitting.value = true
-  try {
-    // Create a temporary options object with listQuality enabled
-    const options = { ...downloadStore.currentOptions, listQuality: true }
-    await downloadStore.addDownloadJob(url.value, options)
-  } catch (error) {
-    console.error('Failed to list quality:', error)
   } finally {
     isSubmitting.value = false
   }

@@ -4,24 +4,29 @@ import { io, Socket } from 'socket.io-client'
 
 export interface DownloadOptions {
   url: string
-  output?: string
-  subfolder: boolean
 
   username?: string
   password?: string
   token?: string
 
-  quality?: string
-  listQuality: boolean
+  // Single resolution height (e.g. 1080). Undefined → "best available".
+  // Multi-resolution selections are fanned out into separate jobs at submit
+  // time; each job carries one height.
+  resolution?: number
 
   allEpisodes: boolean
-
-  outputFormat: 'mp4' | 'mkv'
 
   // Usenet auto-post (only honored when backend has USENET_ENABLED=true).
   // Newznab category (5020 TV/Foreign, 2010 Movies/Foreign) is auto-detected
   // server-side from the filename — no UI input needed.
   autoPostUsenet?: boolean
+}
+
+export interface ProbeState {
+  url: string | null
+  loading: boolean
+  heights: number[] | null
+  error: string | null
 }
 
 export interface DownloadJob {
@@ -83,7 +88,7 @@ export const useDownloadStore = defineStore('download', () => {
         startTime: job.startTime ? new Date(job.startTime) : undefined,
         endTime: job.endTime ? new Date(job.endTime) : undefined,
         logs: [...(job.logs || []), 'Job restored from previous session'],
-        options: { url: job.url ?? '', subfolder: false, listQuality: false, allEpisodes: false, outputFormat: 'mp4' },
+        options: { url: job.url ?? '', allEpisodes: false },
       }))
     } catch (error) {
       console.error('Failed to load persisted jobs:', error)
@@ -128,15 +133,25 @@ export const useDownloadStore = defineStore('download', () => {
   
   const currentOptions = ref<DownloadOptions>({
     url: '',
-    subfolder: false,
-    listQuality: false,
     allEpisodes: false,
-    outputFormat: 'mp4',
     username: undefined,
     password: undefined,
     token: undefined,
     autoPostUsenet: false,
   })
+
+  // Quality probe state — last probed URL, available heights, loading flag.
+  // Reset whenever the user types a new URL.
+  const probe = ref<ProbeState>({
+    url: null,
+    loading: false,
+    heights: null,
+    error: null,
+  })
+
+  // Heights the user ticked in the form. Fanned out into N jobs on submit;
+  // empty array → single "best available" job.
+  const selectedResolutions = ref<number[]>([])
 
   // Computed properties
   const activeJobs = computed(() => 
@@ -357,19 +372,67 @@ export const useDownloadStore = defineStore('download', () => {
       throw new Error('Not connected to server')
     }
 
-    const jobId = Date.now().toString()
-    const job: DownloadJob = {
-      id: jobId,
-      url,
-      status: 'pending',
-      progress: 0,
-      options: { ...currentOptions.value, ...options, url },
-      startTime: new Date(),
-      logs: []
+    // Fan out multi-resolution selection: one job per selected height.
+    // Empty selection → single "best available" job.
+    const resolutions: (number | undefined)[] = selectedResolutions.value.length > 0
+      ? [...selectedResolutions.value]
+      : [undefined]
+
+    const createdJobIds: string[] = []
+    for (let i = 0; i < resolutions.length; i++) {
+      const jobId = (Date.now() + i).toString()
+      jobs.value.push({
+        id: jobId,
+        url,
+        status: 'pending',
+        progress: 0,
+        options: {
+          ...currentOptions.value,
+          ...options,
+          url,
+          resolution: resolutions[i],
+        },
+        startTime: new Date(),
+        logs: [],
+      })
+      createdJobIds.push(jobId)
     }
-    
-    jobs.value.push(job)
-    await startDownload(jobId)
+
+    for (const id of createdJobIds) {
+      await startDownload(id)
+    }
+  }
+
+  const probeUrl = async (url: string): Promise<void> => {
+    if (!url) return
+    if (probe.value.url === url && probe.value.heights !== null) return
+    probe.value = { url, loading: true, heights: null, error: null }
+    try {
+      const res = await fetch(`/api/probe?url=${encodeURIComponent(url)}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        probe.value = { url, loading: false, heights: null, error: body.error || 'Probe failed' }
+        return
+      }
+      const body = (await res.json()) as { heights: number[] }
+      probe.value = { url, loading: false, heights: body.heights, error: null }
+      // Drop any previously-selected heights that aren't available for this URL.
+      selectedResolutions.value = selectedResolutions.value.filter((h) =>
+        body.heights.includes(h),
+      )
+    } catch (err) {
+      probe.value = {
+        url,
+        loading: false,
+        heights: null,
+        error: (err as Error).message || 'Probe failed',
+      }
+    }
+  }
+
+  const resetProbe = () => {
+    probe.value = { url: null, loading: false, heights: null, error: null }
+    selectedResolutions.value = []
   }
 
   const startDownload = async (jobId: string) => {
@@ -408,22 +471,18 @@ export const useDownloadStore = defineStore('download', () => {
   const buildCommandArgs = (options: DownloadOptions): string[] => {
     const args: string[] = []
 
-    if (options.output) args.push('-o', options.output)
-    if (options.subfolder) args.push('--subfolder')
-
     if (options.username) args.push('-u', options.username)
     if (options.password) args.push('-p', options.password)
     if (options.token) args.push('--token', options.token)
 
-    if (options.quality) args.push('-q', options.quality)
-    if (options.listQuality) args.push('--list-quality')
+    if (options.resolution !== undefined) {
+      args.push('--resolution', String(options.resolution))
+    }
 
-    // Always download subtitles and merge them into the container.
-    args.push('-S', '-M')
+    // Always: per-show subfolder, subtitles merged into MKV.
+    args.push('--subfolder', '-S', '-M', '--output-format', 'mkv')
 
     if (options.allEpisodes) args.push('-A')
-
-    if (options.outputFormat === 'mkv') args.push('--output-format', 'mkv')
 
     return args
   }
@@ -482,6 +541,8 @@ export const useDownloadStore = defineStore('download', () => {
     jobs,
     currentOptions,
     serverStatus,
+    probe,
+    selectedResolutions,
     activeJobs,
     completedJobs,
     errorJobs,
@@ -495,6 +556,8 @@ export const useDownloadStore = defineStore('download', () => {
     clearAllData,
     updateOptions,
     buildCommandArgs,
+    probeUrl,
+    resetProbe,
     checkSvtplayDl,
     healthCheck,
     disconnect,

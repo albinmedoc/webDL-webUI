@@ -178,7 +178,7 @@ table and applied live without restart.
 | `NZB_OUTPUT_DIR`                  | `/data/nzb`                                            | Where finished NZB files are written.                                    |
 | `NZB_RETENTION_DAYS`              | `0` (keep forever)                                     | When > 0, a background sweep (twice per day + on startup) deletes `.nzb` files older than this and clears `nzbPath` on the matching `usenet_jobs` rows. |
 | `DB_PATH`                         | `/data/svtplay-dl-webui.db`                            | SQLite location.                                                         |
-| `DOWNLOAD_OUTPUT_DIR`             | `/app/downloads`                                       | Default svtplay-dl output directory used when the form's "Output Directory" field is empty. The path is also `-o`-injected so the snapshot tracker and the downloader agree on where files land. |
+| `DOWNLOAD_OUTPUT_DIR`             | `/data/downloads`                                      | svtplay-dl output directory. `-o`-injected so the snapshot tracker and the downloader agree on where files land. |
 
 ### Indexer hook contract
 
@@ -310,9 +310,8 @@ config display, the History view, and one-shot operations.
 
 ### Volume Mounts
 
-- `/app/downloads`: Mount point for downloaded files.
-- `/data`: Persistent state for the Usenet pipeline (SQLite DB, RAR/PAR2
-  work area, generated NZBs). Required when `USENET_ENABLED=true`.
+- `/data`: Single persistent volume holding downloads (`/data/downloads`),
+  the SQLite DB, the RAR/PAR2 work area, and generated NZBs.
 
 ### Build args
 
@@ -326,7 +325,7 @@ config display, the History view, and one-shot operations.
 docker run -d \
   --name svtplay-dl-webui \
   -p 3001:3001 \
-  -v $(pwd)/downloads:/app/downloads \
+  -v $(pwd)/data:/data \
   svtplay-dl-webui
 ```
 
@@ -374,7 +373,7 @@ docker pull ghcr.io/[username]/svtplay-dl-webui:latest
 docker run -d \
   --name svtplay-dl-webui \
   -p 3001:3001 \
-  -v $(pwd)/downloads:/app/downloads \
+  -v $(pwd)/data:/data \
   ghcr.io/[username]/svtplay-dl-webui:latest
 
 # Or use docker-compose with ghcr.io image

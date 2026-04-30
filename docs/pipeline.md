@@ -36,15 +36,20 @@ trustworthy as the code evolves.
 ## 1. Download (svtplay-dl)
 
 **Trigger.** `DownloadForm.vue` emits a `start-download` socket event with
-the URL and CLI args derived from form options (quality, output format,
-all-episodes, subfolder, optional credentials, optional auto-post flag).
+the URL and CLI args derived from form options (resolutions, all-episodes,
+optional credentials, optional auto-post flag). Output is always MKV with
+subtitles merged and dropped into a per-show subfolder
+(`--subfolder -S -M --output-format mkv`). Multi-resolution selections fan
+out into one socket event per resolution. Available resolutions are
+populated by `GET /api/probe?url=…` (svtplay-dl `--list-quality`) on URL
+blur — no job is created for the probe.
 
 **What runs.** `downloadHandler.ts` → `downloadService.ts:38` spawns
 `svtplay-dl` as a child process. stdout is parsed by
 `progressUtils.ProgressParser` to extract the percent-complete number
 shown in the UI. stderr is forwarded as job logs.
 
-**Where it lands.** `DOWNLOAD_OUTPUT_DIR` (default `/app/downloads`).
+**Where it lands.** `DOWNLOAD_OUTPUT_DIR` (default `/data/downloads`).
 `outputTracker` snapshots the directory before/after the process so we
 know exactly which files svtplay-dl produced — that file list is what
 the auto-post pipeline iterates over.

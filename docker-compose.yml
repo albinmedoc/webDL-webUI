@@ -7,11 +7,8 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      # Downloaded media files
-      - ./downloads:/app/downloads
-
-      # Persistent state: SQLite DB, RAR/PAR2 work dir, generated NZBs.
-      # Required if you enable the Usenet pipeline.
+      # Persistent state: downloads, SQLite DB, RAR/PAR2 work dir, NZBs.
+      # Single mount — everything the app writes lives under /data.
       - ./data:/data
 
       # Optional: bind-mount a host rar binary instead of letting the
