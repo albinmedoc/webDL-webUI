@@ -33,12 +33,14 @@ export interface ActivePipelineMeta {
   abort: AbortController;
 }
 
-export type JobObserver = (jobId: string, event: 'state' | 'progress' | 'log', payload: unknown) => void;
+export type JobObserverEvent = 'enqueued' | 'state' | 'progress' | 'log';
+
+export type JobObserver = (jobId: string, event: JobObserverEvent, payload: unknown) => void;
 
 const active = new Map<string, ActivePipelineMeta>();
 const observers = new Set<JobObserver>();
 
-function notify(jobId: string, event: 'state' | 'progress' | 'log', payload: unknown): void {
+function notify(jobId: string, event: JobObserverEvent, payload: unknown): void {
   for (const cb of observers) {
     try {
       cb(jobId, event, payload);
@@ -165,6 +167,7 @@ export async function enqueueJob(input: EnqueueJobInput): Promise<UsenetJob> {
   getDb().insert(usenetJobs).values(newJob).run();
   logger.info('Usenet job enqueued', { id, mediaPath: input.mediaPath, mediaSizeBytes: mediaSize });
 
+  notify(id, 'enqueued', null);
   scheduleNext();
 
   return getJob(id)!;

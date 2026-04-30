@@ -1,6 +1,7 @@
 export interface ServerConfig {
   port: number;
   downloadOutputDir: string;
+  uploadWatchDir: string;
   cors: {
     origin: string;
     methods: string[];

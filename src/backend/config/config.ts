@@ -8,6 +8,9 @@ export const config: ServerConfig = {
   downloadOutputDir: path.resolve(
     parseValue(REGISTRY.downloadOutputDir, process.env[REGISTRY.downloadOutputDir.envVar]) as string,
   ),
+  uploadWatchDir: path.resolve(
+    parseValue(REGISTRY.uploadWatchDir, process.env[REGISTRY.uploadWatchDir.envVar]) as string,
+  ),
   cors: {
     origin: "http://localhost:5173",
     methods: ["GET", "POST"]

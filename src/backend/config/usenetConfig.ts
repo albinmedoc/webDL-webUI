@@ -74,6 +74,8 @@ export function targetFor(key: RegistryKey): ConfigTarget {
       return { obj: indexerConfig, prop: key };
     case 'downloadOutputDir':
       throw new Error('downloadOutputDir lives on serverConfig, not usenetConfig');
+    case 'uploadWatchDir':
+      throw new Error('uploadWatchDir lives on serverConfig, not usenetConfig');
     default:
       return { obj: usenetConfig, prop: key as keyof UsenetConfig };
   }

@@ -1,18 +1,16 @@
-import path from 'path';
 import type { Socket } from 'socket.io';
 
 import { usenetConfig } from '../config/usenetConfig.js';
 import type { UsenetJob } from '../db/schema.js';
+import { dropForUpload } from '../services/uploadWatcher.js';
 import {
   cancelJob,
-  enqueueJob,
   getJob,
   listJobs,
   retryJob,
   subscribe,
   type JobObserver,
 } from '../services/usenetService.js';
-import { applyReleaseNaming, detectNewznabCategory } from '../services/usenet/releaseNamer.js';
 import type {
   UsenetJobSummary,
   UsenetUploadCancel,
@@ -51,6 +49,13 @@ export class UsenetHandler {
   private subscribeToService(): void {
     const observer: JobObserver = (jobId, event, payload) => {
       switch (event) {
+        case 'enqueued': {
+          const job = getJob(jobId);
+          if (job) {
+            this.socket.emit('usenet-enqueued', { job: toSummary(job) });
+          }
+          break;
+        }
         case 'state': {
           const job = getJob(jobId);
           this.socket.emit('usenet-state-changed', {
@@ -99,22 +104,18 @@ export class UsenetHandler {
       return;
     }
 
+    // Drop a symlink into the upload watch folder. The watcher picks it up,
+    // enqueues the job, and broadcasts `usenet-enqueued` to all clients via
+    // the JobObserver path — so we don't emit anything here.
     try {
-      let mediaPath = data.mediaPath;
-      let category = data.category ?? null;
-      if (data.applyNaming) {
-        category = category ?? detectNewznabCategory(path.basename(mediaPath));
-        mediaPath = await applyReleaseNaming(mediaPath, { quality: data.quality ?? null });
-      }
-      const job = await enqueueJob({
-        mediaPath,
+      await dropForUpload(data.mediaPath, {
         downloadId: data.downloadId ?? null,
-        category,
+        quality: data.quality ?? null,
+        applyNaming: data.applyNaming === true,
       });
-      this.socket.emit('usenet-enqueued', { job: toSummary(job) });
     } catch (err) {
       const error = (err as Error).message;
-      logger.warn('enqueueJob failed', { error });
+      logger.warn('dropForUpload failed', { error });
       this.socket.emit('usenet-error', { error });
     }
   }

@@ -41,6 +41,10 @@ function applyToSingleton(key: RegistryKey, value: unknown): void {
     serverConfig.downloadOutputDir = path.resolve(value as string);
     return;
   }
+  if (key === 'uploadWatchDir') {
+    serverConfig.uploadWatchDir = path.resolve(value as string);
+    return;
+  }
 
   switch (key) {
     case 'hookScript':
@@ -61,6 +65,7 @@ function applyToSingleton(key: RegistryKey, value: unknown): void {
  */
 function readEffective(key: RegistryKey): unknown {
   if (key === 'downloadOutputDir') return serverConfig.downloadOutputDir;
+  if (key === 'uploadWatchDir') return serverConfig.uploadWatchDir;
   switch (key) {
     case 'hookScript':
     case 'nzbOutputDir':

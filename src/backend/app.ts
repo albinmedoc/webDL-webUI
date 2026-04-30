@@ -12,6 +12,7 @@ import { loadOverridesFromDb } from './services/settingsService.js';
 import { recoverInterruptedJobs } from './services/usenetRecoveryService.js';
 import { startRetentionScheduler } from './services/usenet/nzbRetention.js';
 import { detectTools } from './services/usenet/tools.js';
+import { startUploadWatcher } from './services/uploadWatcher.js';
 import { startupKick as kickUsenetQueue } from './services/usenetService.js';
 import { setupMiddleware, setupRoutes } from './middleware/setup.js';
 import { SocketController } from './controllers/socketController.js';
@@ -42,6 +43,9 @@ export function createApp(): AppComponents {
       groups: usenetConfig.groups,
     });
     kickUsenetQueue();
+    startUploadWatcher().catch((err) => {
+      logger.error('Failed to start upload watcher', { error: (err as Error).message });
+    });
   } else {
     logger.info('Usenet upload pipeline disabled (set USENET_ENABLED=true to enable)');
   }

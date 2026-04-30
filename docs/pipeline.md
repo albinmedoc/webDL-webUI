@@ -16,7 +16,7 @@ trustworthy as the code evolves.
    ┌────────────────┐
    │  svtplay-dl    │  child process writes media to DOWNLOAD_OUTPUT_DIR
    └───────┬────────┘
-           │ on close (exit 0) + autoPostUsenet?
+           │ on close (exit 0) + autoPostUsenet, OR manual "Post to Usenet"
            ▼
    ┌────────────────┐
    │ release naming │  rename to scene-style file (Show.S01E02.WEB-DL...)
@@ -24,12 +24,17 @@ trustworthy as the code evolves.
            │
            ▼
    ┌────────────────┐
+   │  /upload drop  │  symlink in UPLOAD_WATCH_DIR (the upload trigger)
+   └───────┬────────┘
+           │ fs.watch fires → enqueueJob (auto-detected category)
+           ▼
+   ┌────────────────┐
    │   enqueueJob   │  insert row in usenet_jobs (state=queued)
    └───────┬────────┘
            │ scheduler picks it up (max USENET_MAX_CONCURRENT)
            ▼
   archiving → par2 → posting → posted → indexing → done
-           │                                     │
+           │                                     │ (symlink in /upload removed)
            └─── on cancel/error → cancelled / failed
 ```
 
@@ -59,7 +64,11 @@ are left on disk; the job is marked `cancelled` and not enqueued.
 
 ## 2. Release naming
 
-Runs only when the user ticked **Auto-post to Usenet**. Source:
+Runs when the user either ticked **Auto-post to Usenet** at submit time
+or pressed the per-file **Post to Usenet** button on a completed
+download. Both paths funnel through `dropForUpload`
+(`src/backend/services/uploadWatcher.ts`), which in turn calls
+`applyReleaseNaming` from
 `src/backend/services/usenet/releaseNamer.ts`.
 
 **Why we rename.** Sonarr and Radarr identify shows/movies by parsing
@@ -113,6 +122,26 @@ row (`category` column) and forwarded to the indexer hook as
 
 If a programmatic caller of `enqueueJob` passes an explicit `category`,
 it wins over auto-detection — the auto-detect is a fallback.
+
+## 3b. Drop into the upload watch folder
+
+After release naming, `dropForUpload` symlinks the renamed media into
+`UPLOAD_WATCH_DIR` (default `/data/upload`). This folder is the single
+trigger for usenet uploads — everything queued, whether kicked off by
+auto-post or the manual button, lands here first. The downloaded media
+itself stays in `DOWNLOAD_OUTPUT_DIR` untouched (the symlink is the
+only thing the pipeline operates on).
+
+`startUploadWatcher` runs `fs.watch` on the directory and, on each new
+entry, calls `enqueueJob` with the (now-renamed) symlink as
+`mediaPath`. On startup the watcher also rescans the directory once so
+files left over from a crash mid-post get picked back up. When a job
+hits `done`, the watcher removes the symlink so the same path can be
+re-posted later.
+
+External drops (files placed in the folder by something other than this
+app) are **not** supported as a documented contract — there is no
+stability check, so a half-written file would race the watcher.
 
 ## 4. Enqueue
 

@@ -77,6 +77,9 @@ export const REGISTRY = defineRegistry({
 
   // svtplay-dl download output dir
   downloadOutputDir:     { key: 'downloadOutputDir',     envVar: 'DOWNLOAD_OUTPUT_DIR',             group: 'download',   kind: 'string',  default: '/data/downloads'                      },
+
+  // Watch folder for usenet uploads. Anything dropped here gets posted.
+  uploadWatchDir:        { key: 'uploadWatchDir',        envVar: 'UPLOAD_WATCH_DIR',                group: 'download',   kind: 'string',  default: '/data/upload'                         },
 });
 
 export type RegistryKey = keyof typeof REGISTRY;
