@@ -25,6 +25,7 @@ RUN if [ "$INSTALL_RAR" = "true" ]; then \
         set -eux; \
         arch="$(uname -m)"; \
         if [ "$arch" = "x86_64" ]; then \
+            echo "Installing RAR version $RAR_VERSION for architecture $arch"; \
             curl -fsSL "https://www.rarlab.com/rar/rarlinux-x64-${RAR_VERSION}.tar.gz" -o /tmp/rar.tar.gz; \
             tar -xzf /tmp/rar.tar.gz -C /tmp; \
             install -m 755 /tmp/rar/rar /usr/local/bin/rar; \
@@ -33,6 +34,8 @@ RUN if [ "$INSTALL_RAR" = "true" ]; then \
         else \
             echo "Skipping RAR install on $arch — RARLAB ships x86_64 only"; \
         fi; \
+    else \
+        echo "Skipping RAR install — INSTALL_RAR is set to false"; \
     fi
 
 RUN npm install -g pnpm@9 nyuu @animetosho/parpar
