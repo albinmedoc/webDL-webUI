@@ -4,12 +4,6 @@ services:
   svtplay-dl-webui:
     build:
       context: .
-      args:
-        # Set INSTALL_RAR=true to bake rar into the image (subject to the
-        # WinRAR/RARLAB license at https://www.rarlab.com/license.htm).
-        # If you leave this false, you must bind-mount a host rar binary —
-        # see the volumes section below.
-        INSTALL_RAR: "false"
     ports:
       - "3001:3001"
     volumes:
@@ -20,8 +14,8 @@ services:
       # Required if you enable the Usenet pipeline.
       - ./data:/data
 
-      # Optional: bind-mount a host rar binary when INSTALL_RAR=false.
-      # Uncomment and adjust the path to your local rar install.
+      # Optional: bind-mount a host rar binary instead of letting the
+      # entrypoint download it (see INSTALL_RAR below).
       # - /usr/local/bin/rar:/usr/local/bin/rar:ro
 
       # Optional: mount your indexer hook script (see examples/).
@@ -29,6 +23,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+
+      # ───────────────────── RAR (runtime install) ─────────────────────
+      # Set to true to have the entrypoint download rar from RARLAB on
+      # start (x86_64 only, subject to https://www.rarlab.com/license.htm).
+      # Skipped automatically if /usr/local/bin/rar already exists.
+      # - INSTALL_RAR=true
+      # - RAR_VERSION=720
 
       # ───────────────── Usenet pipeline (opt-in) ─────────────────
       # Uncomment and fill these to enable Usenet auto-posting. The whole
