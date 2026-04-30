@@ -1,4 +1,5 @@
 import express, { Application } from 'express';
+import fs from 'fs';
 import { createServer, Server as HTTPServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { fileURLToPath } from 'url';
@@ -29,6 +30,9 @@ export interface AppComponents {
 export function createApp(): AppComponents {
   runMigrations();
   loadOverridesFromDb();
+  // svtplay-dl's `-o` flag treats the path as a filename prefix unless it's
+  // an existing directory, so ensure the configured download dir exists.
+  fs.mkdirSync(config.downloadOutputDir, { recursive: true });
   recoverInterruptedJobs();
 
   if (usenetConfig.enabled) {
