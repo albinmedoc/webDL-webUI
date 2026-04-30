@@ -102,14 +102,6 @@
                     - {{ formatTime(job.endTime) }}
                   </span>
                 </small>
-                <span 
-                  v-if="isJobRestored(job)" 
-                  class="badge bg-info ms-2" 
-                  title="This job was restored from a previous session"
-                >
-                  <i class="bi bi-arrow-clockwise me-1"></i>
-                  Restored
-                </span>
               </div>
               
               <!-- URL -->
@@ -368,15 +360,4 @@ const clearOldJobs = (days: number) => {
   showDropdown.value = false
 }
 
-const isJobRestored = (job: any): boolean => {
-  // A job is considered restored if it has logs containing sync messages
-  if (!job?.logs || !Array.isArray(job.logs)) return false
-  
-  return job.logs.some((log: string) => 
-    typeof log === 'string' && (
-      log.includes('Synced with server') || 
-      log.includes('restored from previous session')
-    )
-  )
-}
 </script>

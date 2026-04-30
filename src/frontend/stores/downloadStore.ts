@@ -99,7 +99,7 @@ export const useDownloadStore = defineStore('download', () => {
         error: job.error,
         startTime: job.startTime ? new Date(job.startTime) : undefined,
         endTime: job.endTime ? new Date(job.endTime) : undefined,
-        logs: [...(job.logs || []), 'Job restored from previous session'],
+        logs: [...(job.logs || [])],
         options: { url: job.url ?? '', allEpisodes: false, resolution: job.resolution },
         outputDir: job.outputDir,
         files: Array.isArray(job.files) ? job.files : undefined,
