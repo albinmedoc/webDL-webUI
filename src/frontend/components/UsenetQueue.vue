@@ -67,9 +67,16 @@
                 {{ job.error }}
               </div>
 
-              <div v-if="job.nzbPath && job.state === 'done'" class="small text-muted mb-2">
-                <i class="bi bi-file-earmark-zip me-1"></i>
-                NZB: <code>{{ basename(job.nzbPath) }}</code>
+              <div v-if="job.nzbPath && job.state === 'done'" class="small mb-2">
+                <a
+                  :href="`/api/usenet/jobs/${job.id}/nzb`"
+                  :download="basename(job.nzbPath)"
+                  class="text-decoration-none"
+                  title="Download NZB"
+                >
+                  <i class="bi bi-download me-1"></i>
+                  <code>{{ basename(job.nzbPath) }}</code>
+                </a>
               </div>
 
               <div v-if="job.logs.length > 0" class="mb-1">
