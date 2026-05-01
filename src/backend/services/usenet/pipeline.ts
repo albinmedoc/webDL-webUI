@@ -211,29 +211,34 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineRes
     }
 
     if (shouldRun('indexing', startState)) {
-      setState('indexing');
-      try {
-        const result = await runHook(
-          {
-            nzbPath,
-            title: baseName,
-            category: job.category ?? '',
-            password: job.rarPassword,
-            group: usenetConfig.groups[0] ?? '',
-            mediaPath: job.mediaPath,
-          },
-          signal
-        );
-        if (!result.ok) {
-          throw new StageError(
-            `indexer hook exited ${result.exitCode}: ${result.stderr || result.stdout}`,
-            'indexing'
+      if (!indexerConfig.hookScript) {
+        log('No INDEXER_HOOK_SCRIPT configured — skipping indexing stage');
+        logger.info('Skipping indexer stage — no hook configured', { jobId });
+      } else {
+        setState('indexing');
+        try {
+          const result = await runHook(
+            {
+              nzbPath,
+              title: baseName,
+              category: job.category ?? '',
+              password: job.rarPassword,
+              group: usenetConfig.groups[0] ?? '',
+              mediaPath: job.mediaPath,
+            },
+            signal
           );
+          if (!result.ok) {
+            throw new StageError(
+              `indexer hook exited ${result.exitCode}: ${result.stderr || result.stdout}`,
+              'indexing'
+            );
+          }
+          transition(jobId, { indexerResponse: result.response ?? null });
+        } catch (err) {
+          if (err instanceof StageError || err instanceof AbortError) throw err;
+          throw new StageError(`indexer hook failed: ${(err as Error).message}`, 'indexing');
         }
-        transition(jobId, { indexerResponse: result.response ?? null });
-      } catch (err) {
-        if (err instanceof StageError || err instanceof AbortError) throw err;
-        throw new StageError(`indexer hook failed: ${(err as Error).message}`, 'indexing');
       }
     }
 
