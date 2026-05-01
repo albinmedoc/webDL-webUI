@@ -60,6 +60,8 @@ export const REGISTRY = defineRegistry({
 
   // Usenet — subject & nyuu
   subjectTemplate:       { key: 'subjectTemplate',       envVar: 'USENET_SUBJECT_TEMPLATE',         group: 'subject',    kind: 'string',  default: '[{filename}] - "{rarname}" yEnc ({part}/{total})' },
+  posterFrom:            { key: 'posterFrom',            envVar: 'USENET_POSTER_FROM',              group: 'subject',    kind: 'string',  default: '',
+    description: 'Value for the article From: header. Supports {random} for a per-post hex token. Empty = let nyuu pick its default.' },
   nfoPath:               { key: 'nfoPath',               envVar: 'USENET_NFO_PATH',                 group: 'subject',    kind: 'string',  default: ''                                     },
   nyuuExtraArgs:         { key: 'nyuuExtraArgs',         envVar: 'USENET_NYUU_EXTRA_ARGS',          group: 'subject',    kind: 'shellArgs', default: [] as string[]                       },
 

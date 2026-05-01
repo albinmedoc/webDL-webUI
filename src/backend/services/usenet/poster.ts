@@ -15,6 +15,7 @@ export interface PostToUsenetOptions {
   nzbOutPath: string;
   config: UsenetConfig;
   subjectTemplate?: string;
+  rarPassword?: string;
   onProgress?: (line: string) => void;
   dryRun?: boolean;
   signal?: AbortSignal;
@@ -45,6 +46,7 @@ function maskCredentialArg(args: string[]): string[] {
     if (i === 0) return a;
     const prev = args[i - 1];
     if (prev === '-p' || prev === '--password') return '***';
+    if (prev === '--meta' && a.startsWith('password=')) return 'password=***';
     return a;
   });
 }
@@ -54,8 +56,9 @@ export function buildNyuuArgs(opts: {
   files: string[];
   nzbOutPath: string;
   subjectTemplate?: string;
+  rarPassword?: string;
 }): string[] {
-  const { config, files, nzbOutPath, subjectTemplate } = opts;
+  const { config, files, nzbOutPath, subjectTemplate, rarPassword } = opts;
 
   if (!config.host) throw new Error('USENET_HOST is not set');
   if (!config.user) throw new Error('USENET_USER is not set');
@@ -78,6 +81,17 @@ export function buildNyuuArgs(opts: {
 
   if (config.ssl) args.push('-S');
 
+  if (config.posterFrom) {
+    args.push('-f', substituteRandomToken(config.posterFrom));
+  }
+
+  // Embed the RAR password as an NZB <meta type="password"> tag so
+  // downstream readers (nzbDAV, sabnzbd, nzbget) can decrypt without
+  // needing a sidecar.
+  if (rarPassword) {
+    args.push('--meta', `password=${rarPassword}`);
+  }
+
   if (config.nyuuExtraArgs.length > 0) {
     args.push(...config.nyuuExtraArgs);
   }
@@ -89,11 +103,11 @@ export function buildNyuuArgs(opts: {
 }
 
 export async function postToUsenet(opts: PostToUsenetOptions): Promise<PostToUsenetResult> {
-  const { files, workDir, nzbOutPath, config, subjectTemplate, onProgress, dryRun, signal } = opts;
+  const { files, workDir, nzbOutPath, config, subjectTemplate, rarPassword, onProgress, dryRun, signal } = opts;
 
   if (files.length === 0) throw new Error('postToUsenet requires at least one file');
 
-  const args = buildNyuuArgs({ config, files, nzbOutPath, subjectTemplate });
+  const args = buildNyuuArgs({ config, files, nzbOutPath, subjectTemplate, rarPassword });
 
   logger.info(`nyuu ${maskCredentialArg(args).join(' ')}`);
 
@@ -105,6 +119,16 @@ export async function postToUsenet(opts: PostToUsenetOptions): Promise<PostToUse
   ensureNyuuAvailable();
   if (signal?.aborted) throw new AbortError();
   await fs.mkdir(path.dirname(nzbOutPath), { recursive: true });
+
+  // nyuu refuses to overwrite an existing NZB and aborts with EEXIST. A
+  // leftover at this path can only be from a prior failed run, so clear
+  // it before starting.
+  try {
+    await fs.unlink(nzbOutPath);
+    logger.info(`Removed stale NZB before posting: ${nzbOutPath}`);
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
+  }
 
   await new Promise<void>((resolve, reject) => {
     const proc = spawn('nyuu', args, { cwd: workDir });

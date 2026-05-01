@@ -14,6 +14,7 @@ export interface UsenetConfig {
   maxConcurrent: number;
   minFreeDiskMultiplier: number;
   subjectTemplate: string;
+  posterFrom: string;
   nfoPath: string;
   nyuuExtraArgs: string[];
   releaseGroup: string;
@@ -45,6 +46,7 @@ export const usenetConfig: UsenetConfig = {
   maxConcurrent: fromEnv('maxConcurrent') as number,
   minFreeDiskMultiplier: fromEnv('minFreeDiskMultiplier') as number,
   subjectTemplate: fromEnv('subjectTemplate') as string,
+  posterFrom: fromEnv('posterFrom') as string,
   nfoPath: fromEnv('nfoPath') as string,
   nyuuExtraArgs: fromEnv('nyuuExtraArgs') as string[],
   releaseGroup: fromEnv('releaseGroup') as string,
@@ -95,6 +97,7 @@ export interface UsenetConfigPublic {
   maxConcurrent: number;
   minFreeDiskMultiplier: number;
   subjectTemplate: string;
+  posterFrom: string;
   nfoPath: string;
   nyuuExtraArgs: string[];
   indexer: {
@@ -118,6 +121,7 @@ export function getPublicConfig(): UsenetConfigPublic {
     maxConcurrent: usenetConfig.maxConcurrent,
     minFreeDiskMultiplier: usenetConfig.minFreeDiskMultiplier,
     subjectTemplate: usenetConfig.subjectTemplate,
+    posterFrom: usenetConfig.posterFrom,
     nfoPath: usenetConfig.nfoPath,
     nyuuExtraArgs: usenetConfig.nyuuExtraArgs,
     indexer: {

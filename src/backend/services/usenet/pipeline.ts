@@ -192,6 +192,7 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineRes
           workDir,
           nzbOutPath: nzbPath,
           config: usenetConfig,
+          rarPassword: job.rarPassword,
           onProgress: (line) => {
             log(line);
             const m = /(\d+(?:\.\d+)?)\s*%/.exec(line);
