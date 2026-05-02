@@ -162,14 +162,6 @@
               <i class="bi" :class="nntpTesting ? 'bi-arrow-clockwise' : 'bi-broadcast-pin'"></i>
               {{ nntpTesting ? 'Testing…' : 'Test NNTP' }}
             </button>
-            <button
-              class="btn btn-outline-primary btn-sm"
-              :disabled="!enabled || !hookScriptSet || indexerTesting"
-              @click="testIndexer"
-            >
-              <i class="bi" :class="indexerTesting ? 'bi-arrow-clockwise' : 'bi-play-circle'"></i>
-              {{ indexerTesting ? 'Testing…' : 'Test indexer hook' }}
-            </button>
           </div>
 
           <div v-if="nntpResult" class="alert alert-sm py-2 small" :class="nntpResult.ok ? 'alert-success' : 'alert-danger'">
@@ -181,16 +173,6 @@
             </div>
             <div v-if="nntpResult.banner" class="mt-1"><code>{{ nntpResult.banner }}</code></div>
             <div v-if="nntpResult.groupResponse" class="mt-1"><code>{{ nntpResult.groupResponse }}</code></div>
-          </div>
-
-          <div v-if="indexerResult" class="alert alert-sm py-2 small" :class="indexerResult.ok ? 'alert-success' : 'alert-danger'">
-            <div>
-              <i class="bi me-1" :class="indexerResult.ok ? 'bi-check-circle' : 'bi-x-circle'"></i>
-              <strong>Indexer hook --check:</strong>
-              {{ indexerResult.ok ? 'OK' : (indexerResult.error || `exit ${indexerResult.exitCode}`) }}
-            </div>
-            <pre v-if="indexerResult.stdout" class="mb-0 mt-1 small bg-dark text-info p-2 rounded" style="white-space: pre-wrap;">{{ indexerResult.stdout }}</pre>
-            <pre v-if="indexerResult.stderr" class="mb-0 mt-1 small bg-dark text-warning p-2 rounded" style="white-space: pre-wrap;">{{ indexerResult.stderr }}</pre>
           </div>
         </div>
       </div>
@@ -231,15 +213,6 @@ interface NntpResult {
   durationMs: number
 }
 
-interface IndexerResult {
-  ok: boolean
-  exitCode?: number | null
-  signal?: string | null
-  stdout?: string
-  stderr?: string
-  error?: string
-}
-
 defineEmits<{ (e: 'close'): void }>()
 
 const usenetStore = useUsenetStore()
@@ -254,8 +227,6 @@ const saveResult = ref<{ ok: boolean; message: string } | null>(null)
 
 const nntpTesting = ref(false)
 const nntpResult = ref<NntpResult | null>(null)
-const indexerTesting = ref(false)
-const indexerResult = ref<IndexerResult | null>(null)
 
 const groupOrder = [
   { id: 'connection', label: 'Connection',     icon: 'bi-broadcast' },
@@ -276,7 +247,6 @@ const settingsByGroup = computed(() => {
 
 const enabled = computed(() => effective('enabled') === true)
 const hostSet = computed(() => typeof effective('host') === 'string' && (effective('host') as string).length > 0)
-const hookScriptSet = computed(() => typeof effective('hookScript') === 'string' && (effective('hookScript') as string).length > 0)
 
 const toolList = computed(() => {
   const t = usenetStore.tools
@@ -413,19 +383,6 @@ async function testNntp(): Promise<void> {
     nntpResult.value = { ok: false, error: (err as Error).message, durationMs: 0 }
   } finally {
     nntpTesting.value = false
-  }
-}
-
-async function testIndexer(): Promise<void> {
-  indexerTesting.value = true
-  indexerResult.value = null
-  try {
-    const res = await fetch('/api/usenet/test/indexer', { method: 'POST' })
-    indexerResult.value = await res.json()
-  } catch (err) {
-    indexerResult.value = { ok: false, error: (err as Error).message }
-  } finally {
-    indexerTesting.value = false
   }
 }
 

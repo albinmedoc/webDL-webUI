@@ -140,10 +140,12 @@ and the failure was in `indexing`) or redo the whole upload.
    `--build-arg INSTALL_RAR=true` or bind-mount a host binary at
    `/usr/local/bin/rar:ro`. `nyuu` and `@animetosho/parpar` are already
    bundled.
-3. Optionally point `INDEXER_HOOK_SCRIPT` at a script that posts to your
-   indexer (see [examples/drunkenslug-upload.sh](examples/drunkenslug-upload.sh)).
-4. Open the gear icon in the nav bar → **Test NNTP** and **Test indexer
-   hook** to verify the configuration before the first real upload.
+3. Optionally point `INDEXER_HOOK_SCRIPT` at a hook in
+   [`hooks/indexers/`](hooks/indexers/) (e.g.
+   `/app/hooks/indexers/drunkenslug.sh` plus `DRUNKENSLUG_API_KEY`),
+   or a custom script following the same env-var contract.
+4. Open the gear icon in the nav bar → **Test NNTP** to verify the
+   connection before the first real upload.
 5. On the Downloads page, tick **Auto-post to Usenet after download**;
    completed downloads will queue automatically.
 
@@ -182,19 +184,30 @@ table and applied live without restart.
 
 ### Indexer hook contract
 
-The hook script is invoked with **no arguments** for an upload and with
-`--check` for the connectivity test in the Settings panel. Required
-behaviour:
+The hook script is invoked with **no arguments** once an NZB has been
+written. Inputs come in via environment variables; per-indexer config
+(API URL, API key) lives in its own env vars so multiple hooks can
+coexist without trampling each other.
 
-| Mode                | Inputs                                                           | Required exit codes                |
-|---------------------|------------------------------------------------------------------|------------------------------------|
-| Upload (no args)    | env: `INDEXER_NZB_PATH`, `INDEXER_TITLE`, `INDEXER_CATEGORY` (Newznab ID, see below), `INDEXER_PASSWORD`, `INDEXER_GROUP`, `INDEXER_MEDIA_PATH` | `0` on accepted upload, non-zero on failure (stderr captured into the job log) |
-| `--check`           | (no env vars)                                                    | `0` if connectivity + credentials are fine, non-zero otherwise |
+| Inputs (env)                                                                                  | Required exit codes                |
+|-----------------------------------------------------------------------------------------------|------------------------------------|
+| `INDEXER_NZB_PATH`, `INDEXER_TITLE`, `INDEXER_CATEGORY` (Newznab ID, see below), `INDEXER_PASSWORD`, `INDEXER_GROUP`, `INDEXER_MEDIA_PATH` | `0` on accepted upload, non-zero on failure (stderr captured into the job log) |
 
-Anything written to stdout in upload mode is recorded as the job's
-`indexerResponse` and shown in the History view. See
-[examples/drunkenslug-upload.sh](examples/drunkenslug-upload.sh) for a
-working reference implementation.
+Anything written to stdout is recorded as the job's `indexerResponse`
+and shown in the History view.
+
+**Bundled hooks** live in [`hooks/indexers/`](hooks/indexers/) and are
+copied into the image at `/app/hooks/indexers/`, so a working setup is
+usually two env vars away:
+
+```yaml
+- INDEXER_HOOK_SCRIPT=/app/hooks/indexers/drunkenslug.sh
+- DRUNKENSLUG_API_KEY=your-api-key
+```
+
+For a custom indexer, drop a script alongside the bundled ones (same
+contract, its own `<INDEXER>_API_KEY`/`<INDEXER>_API_URL` env vars) and
+point `INDEXER_HOOK_SCRIPT` at it.
 
 `INDEXER_CATEGORY` is auto-detected from the svtplay-dl filename and set
 to a standard Newznab/Newsnab category ID — `5020` (TV/Foreign) when the
@@ -239,8 +252,7 @@ error. ParPar and Nyuu are bundled (both are MIT-licensed npm packages).
 
 1. `docker-compose up -d`
 2. In the UI, click **gear → Test NNTP** (should show banner + 281 auth
-   response) and **Test indexer hook** (should print whatever your hook's
-   `--check` branch outputs).
+   response).
 3. Add a small download, tick "Auto-post to Usenet", submit.
 4. Watch the Usenet queue sidebar: states should advance
    queued → archiving → par2 → posting → posted → indexing → done.
@@ -293,7 +305,6 @@ Check if svtplay-dl is available and get version info.
 |--------|-------------------------------|--------------------------------------------------------------|
 | GET    | `/api/usenet/config`          | Public configuration (passwords/hook-script paths redacted). |
 | POST   | `/api/usenet/test/nntp`       | Open a TLS/TCP connection, run AUTHINFO + GROUP, return banner + duration. |
-| POST   | `/api/usenet/test/indexer`    | Run the configured hook with `--check`, return exit code + stdout/stderr tail. |
 | GET    | `/api/usenet/history`         | Paginated job list. Query params: `page`, `pageSize`, `state`, `search` (filename substring). |
 | GET    | `/api/usenet/jobs/:id`        | Full job row, including `rarPassword` (used by the password reveal). |
 | GET    | `/api/usenet/jobs/:id/nzb`    | Download the generated NZB file.                             |

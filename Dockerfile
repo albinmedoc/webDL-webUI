@@ -50,6 +50,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=frontend-builder /app/dist ./dist
 COPY package.json pnpm-lock.yaml ./
 COPY src/backend ./src/backend
+COPY hooks ./hooks
+RUN chmod +x ./hooks/indexers/*.sh
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

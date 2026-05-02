@@ -8,7 +8,7 @@ Tracking progress for the feature defined in `TODO.md`.
 - **Frontend routing**: `vue-router` for tab switching between Downloads and Usenet History views.
 - **Auto-post concurrency**: queue uploads immediately as each download finishes; `USENET_MAX_CONCURRENT` caps parallelism.
 - **DB file**: `/data/svtplay-dl-webui.db` (mounted volume). Schema covers Usenet jobs/history only — existing download state stays in localStorage so feature-flag-off requirement is trivially met.
-- **Indexer hook contract**: User sets `INDEXER_HOOK_SCRIPT=/path/to/script.sh`. Invoked with env vars: `NZB_FILE`, `RAR_PASSWORD`, `MEDIA_FILENAME`, `MEDIA_SIZE_BYTES`, `CATEGORY` (optional). Exit 0 = success; non-zero = failure (stderr captured to job log). **Contract requirement**: when invoked with single arg `--check`, script must validate connectivity/credentials and exit 0/non-zero without uploading. Sample `examples/drunkenslug-upload.sh` implements this.
+- **Indexer hook contract**: User sets `INDEXER_HOOK_SCRIPT=/path/to/script.sh`. Invoked once per finished NZB, with env vars: `INDEXER_NZB_PATH`, `INDEXER_TITLE`, `INDEXER_CATEGORY` (Newznab id), `INDEXER_PASSWORD`, `INDEXER_GROUP`, `INDEXER_MEDIA_PATH`. Exit 0 = success; non-zero = failure (stderr captured to job log). Per-indexer config (API URL/key) lives in its own env vars so multiple bundled hooks can coexist. Bundled scripts live in `hooks/indexers/` and ship inside the image at `/app/hooks/indexers/`.
 - **Archiver**: RAR only. `which rar` at startup; cache result. If rar is missing at upload time, fail loudly with a clear error rather than producing a non-standard archive. (7z fallback considered and dropped — extra code path, unnecessary given user's setup.)
 - **RAR settings**: `rar a -m0 -v50m` (store, no compression, 50 MB volumes). Run par2 on the rar files, not the original.
 - **Docker RAR**: `ARG INSTALL_RAR=false` build arg. Default off (legal). User can also bind-mount host binary via `/usr/bin/rar:/usr/local/bin/rar:ro`. With default build, uploads fail until rar is provided one way or the other — surfaced via the Settings panel "Test" button and at upload time.
@@ -77,8 +77,8 @@ Split into 5 sub-batches, each a commit point.
 
 #### Phase 3c — Network pipeline wrappers ✅
 - [x] `usenet/poster.ts` — `postToUsenet({ files, workDir, nzbOutPath, config, subjectTemplate, dryRun, onProgress })`. `buildNyuuArgs()` is exported for reuse in tests/UI. `substituteRandomToken()` replaces `{random}` with crypto hex. Nyuu has no native dry-run; ours is "skip spawn, return constructed args" for validating config without requiring the binary.
-- [x] `usenet/indexer.ts` — `runHook({nzbPath, title, category, password, group, mediaPath?})` + `runHookCheck()` (invokes script with `--check`). Captures stdout/stderr tail, masks password in startup logs.
-- [x] Smoke-tested arg construction, `{random}` substitution, `runHook`, `runHookCheck`, and dry-run mode (without nyuu installed).
+- [x] `usenet/indexer.ts` — `runHook({nzbPath, title, category, password, group, mediaPath?})`. Captures stdout/stderr tail, masks password in startup logs.
+- [x] Smoke-tested arg construction, `{random}` substitution, `runHook`, and dry-run mode (without nyuu installed).
 
 #### Phase 3d — Pipeline orchestrator + service ✅
 - [x] `usenet/pipeline.ts` — orchestrator implementing the state machine. Each transition persisted via Drizzle. Cleanup matrix honored. Disk-space precheck on work root. Posting % parsed best-effort from nyuu stderr.
@@ -126,7 +126,7 @@ Split into 5 sub-batches, each a commit point.
 - [x] Migrated Dockerfile from npm to pnpm to match the rest of the project
 - [x] `docker-compose.yml`: `/data` volume, `INSTALL_RAR` build arg, commented env var block covering every USENET_*/INDEXER_* knob
 - [x] README — full Usenet section with pipeline diagram, env var reference table, indexer hook contract, RAR licensing disclaimer, manual integration test walkthrough, operational caveats (cancel-during-posting orphans articles on Eweka, no resume mid-post, posting-plans note, nzbDAV `-m0` requirement), and the new REST endpoints in the API table
-- [x] `examples/drunkenslug-upload.sh` — reference hook implementing both upload and `--check` modes against drunkenslug's API; demonstrates the full env-var contract
+- [x] `hooks/indexers/drunkenslug.sh` — reference hook against drunkenslug's API; demonstrates the env-var contract. Folder structure is the convention for future indexers (each gets its own `<NAME>_API_KEY`/`<NAME>_API_URL`).
 
 ## Notes / context worth keeping
 

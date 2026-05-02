@@ -15,8 +15,9 @@ services:
       # entrypoint download it (see INSTALL_RAR below).
       # - /usr/local/bin/rar:/usr/local/bin/rar:ro
 
-      # Optional: mount your indexer hook script (see examples/).
-      # - ./examples/drunkenslug-upload.sh:/opt/hooks/drunkenslug-upload.sh:ro
+      # Optional: mount a custom indexer hook script. The bundled ones live at
+      # /app/hooks/indexers/ inside the image — no mount needed for those.
+      # - ./my-hook.sh:/opt/hooks/my-hook.sh:ro
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -48,8 +49,10 @@ services:
       # - USENET_NYUU_EXTRA_ARGS=
 
       # ───────────────────── Indexer hook ──────────────────────
-      # Path inside the container; mount it via volumes above.
-      # - INDEXER_HOOK_SCRIPT=/opt/hooks/drunkenslug-upload.sh
+      # Bundled hooks (see hooks/indexers/ in the repo):
+      # - INDEXER_HOOK_SCRIPT=/app/hooks/indexers/drunkenslug.sh
+      # - DRUNKENSLUG_API_KEY=your-api-key
+      # - DRUNKENSLUG_API_URL=https://drunkenslug.com/api
 
       # Custom paths (defaults point inside /data; override only if needed):
       # - DB_PATH=/data/svtplay-dl-webui.db

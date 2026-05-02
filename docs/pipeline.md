@@ -263,8 +263,10 @@ environment variables (and no CLI arguments):
 Anything the script writes to stdout is recorded as the job's
 `indexerResponse` and shown in the History view. Non-zero exit ==
 `failed` at stage `indexing`. See
-[examples/drunkenslug-upload.sh](../examples/drunkenslug-upload.sh) for
-a working reference.
+[`hooks/indexers/drunkenslug.sh`](../hooks/indexers/drunkenslug.sh) for
+a working reference. The folder is the convention for additional
+indexers — drop in `nzbplanet.sh`, `whatever.sh`, etc., each with its
+own `<NAME>_API_KEY`/`<NAME>_API_URL` env vars.
 
 If `INDEXER_HOOK_SCRIPT` is empty, the stage is a no-op — useful for
 nzbDAV-only setups where the NZB landing in `NZB_OUTPUT_DIR` is the
@@ -288,8 +290,8 @@ Sonarr/Radarr (via Prowlarr) can find it under TV/Foreign or
 Movies/Foreign. Sonarr's release-name parser extracts show/season/episode
 from `INDEXER_TITLE` — which is why release naming has to be correct.
 
-The reference script
-[examples/drunkenslug-upload.sh](../examples/drunkenslug-upload.sh)
+The bundled
+[`hooks/indexers/drunkenslug.sh`](../hooks/indexers/drunkenslug.sh)
 handles this for DrunkenSlug; private indexers usually expose a similar
 upload endpoint.
 
@@ -341,8 +343,8 @@ changes (NNTP credentials etc. take effect on the next job).
   original (pre-rename) filename, so the persisted category is correct;
   this only affects what the renamed file looks like.
 - **Indexer hook fails.** History view shows the hook's stderr tail.
-  Re-run `--check` from Settings → Test indexer hook to confirm
-  connectivity in isolation.
+  Run the script directly from a shell with the same `INDEXER_*` env
+  vars to reproduce in isolation.
 - **NZB never appears.** Check `NZB_OUTPUT_DIR` exists and is writable;
   check job logs for nyuu output. A failed NZB write surfaces as
   `nyuu reported success but no NZB at <path>`.

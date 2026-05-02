@@ -117,11 +117,3 @@ export async function runHook(hookEnv: IndexerHookEnv, signal?: AbortSignal): Pr
   });
   return await spawnHook([], env, signal);
 }
-
-export async function runHookCheck(signal?: AbortSignal): Promise<IndexerHookResult> {
-  if (!indexerConfig.hookScript) {
-    throw new Error('INDEXER_HOOK_SCRIPT is not configured');
-  }
-  logger.info('Running indexer hook --check', { script: indexerConfig.hookScript });
-  return await spawnHook(['--check'], {}, signal);
-}
