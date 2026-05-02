@@ -109,6 +109,10 @@ export function getJob(jobId: string): UsenetJob | null {
   return getDb().select().from(usenetJobs).where(eq(usenetJobs.id, jobId)).get() ?? null;
 }
 
+export function findJobsByMediaPath(mediaPath: string): UsenetJob[] {
+  return getDb().select().from(usenetJobs).where(eq(usenetJobs.mediaPath, mediaPath)).all();
+}
+
 export function isActive(jobId: string): boolean {
   return active.has(jobId);
 }

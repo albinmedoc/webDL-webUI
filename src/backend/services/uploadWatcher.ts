@@ -6,7 +6,7 @@ import { config as serverConfig } from '../config/config.js';
 import { usenetConfig } from '../config/usenetConfig.js';
 import { logger } from '../utils/logger.js';
 import { applyReleaseNaming, detectNewznabCategory } from './usenet/releaseNamer.js';
-import { enqueueJob, getJob, subscribe } from './usenetService.js';
+import { enqueueJob, findJobsByMediaPath, getJob, subscribe } from './usenetService.js';
 
 export interface DropOptions {
   downloadId?: string | null;
@@ -102,6 +102,41 @@ async function handleAdd(linkPath: string): Promise<void> {
     logger.warn('Upload entry has no resolvable target, ignoring', { linkPath });
     return;
   }
+
+  // A previous run may have left this symlink behind even though a job for it
+  // already exists in the DB — e.g. the post-`done` unlink didn't land before
+  // the container was killed, or an earlier run failed mid-pipeline. The
+  // in-memory `enqueued` Set is empty after a restart, so without a DB check
+  // we'd happily insert a fresh duplicate job and re-post the file.
+  const priorJobs = findJobsByMediaPath(linkPath).filter((j) => j.state !== 'cancelled');
+  if (priorJobs.length > 0) {
+    enqueued.add(linkPath);
+    pending.delete(linkPath);
+    const done = priorJobs.find((j) => j.state === 'done');
+    if (done) {
+      try {
+        await fsp.unlink(linkPath);
+        enqueued.delete(linkPath);
+        logger.info('Removed leftover upload symlink for completed job', {
+          linkPath,
+          jobId: done.id,
+        });
+      } catch (err) {
+        logger.debug('Failed to remove leftover upload symlink', {
+          linkPath,
+          error: (err as Error).message,
+        });
+      }
+    } else {
+      logger.info('Upload symlink already tracked by existing job, skipping enqueue', {
+        linkPath,
+        jobId: priorJobs[0].id,
+        state: priorJobs[0].state,
+      });
+    }
+    return;
+  }
+
   inflight.add(linkPath);
   try {
     const meta = pending.get(linkPath);
