@@ -66,7 +66,8 @@ ENV DB_PATH=/data/svtplay-dl-webui.db \
     PORT=3001 \
     NODE_ENV=production \
     INSTALL_RAR=false \
-    RAR_VERSION=720
+    RAR_VERSION=720 \
+    APP_VERSION=${VERSION}
 
 EXPOSE 3001
 

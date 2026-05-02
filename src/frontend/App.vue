@@ -5,6 +5,9 @@
         <RouterLink to="/" class="navbar-brand fw-bold fs-3">
           <i class="bi bi-download me-2"></i>
           SVTPlay-dl Web Interface
+          <span v-if="version" class="ms-2 badge bg-light text-primary fw-normal align-middle" style="font-size: 0.7rem;">
+            {{ version }}
+          </span>
         </RouterLink>
         <ul class="navbar-nav me-auto">
           <li class="nav-item">
@@ -43,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 import { useDownloadStore } from './stores/downloadStore'
 import { useUsenetStore } from './stores/usenetStore'
@@ -52,6 +55,18 @@ import SettingsModal from './components/SettingsModal.vue'
 const downloadStore = useDownloadStore()
 const usenetStore = useUsenetStore()
 const settingsOpen = ref(false)
+const version = ref<string | null>(null)
+
+onMounted(() => {
+  fetch('/api/health')
+    .then((r) => r.json())
+    .then((data) => {
+      version.value = typeof data.version === 'string' ? data.version : null
+    })
+    .catch(() => {
+      version.value = null
+    })
+})
 </script>
 
 <style scoped>
