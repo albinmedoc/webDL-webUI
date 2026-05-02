@@ -1,5 +1,11 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import { createDownloadHandler, DownloadStartData, DownloadCancelData, DownloadSyncData } from '../handlers/downloadHandler.js';
+import {
+  createDownloadHandler,
+  DownloadStartData,
+  DownloadCancelData,
+  DownloadRemoveData,
+  DownloadClearOldData,
+} from '../handlers/downloadHandler.js';
 import { UsenetHandler } from '../handlers/usenetHandler.js';
 import type {
   UsenetUploadStart,
@@ -23,7 +29,6 @@ export class SocketController {
       const usenetHandler = new UsenetHandler(socket);
       const downloadHandler = createDownloadHandler(socket, usenetHandler);
 
-      // Register all socket event handlers
       socket.on('start-download', (data: DownloadStartData) => {
         downloadHandler.handleStartDownload(data);
       });
@@ -32,8 +37,24 @@ export class SocketController {
         downloadHandler.handleCancelDownload(data);
       });
 
-      socket.on('sync-downloads', (data: DownloadSyncData) => {
-        downloadHandler.handleSyncDownloads(data);
+      socket.on('remove-download-job', (data: DownloadRemoveData) => {
+        downloadHandler.handleRemoveJob(data);
+      });
+
+      socket.on('clear-completed-downloads', () => {
+        downloadHandler.handleClearCompleted();
+      });
+
+      socket.on('clear-old-downloads', (data: DownloadClearOldData) => {
+        downloadHandler.handleClearOld(data);
+      });
+
+      socket.on('clear-all-downloads', () => {
+        downloadHandler.handleClearAll();
+      });
+
+      socket.on('sync-downloads', () => {
+        downloadHandler.handleSyncDownloads();
       });
 
       socket.on('health-check', () => {
@@ -61,6 +82,7 @@ export class SocketController {
       });
 
       socket.on('disconnect', () => {
+        downloadHandler.dispose();
         usenetHandler.dispose();
         logger.info('Client disconnected', { socketId: socket.id });
       });

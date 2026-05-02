@@ -44,6 +44,40 @@ export const usenetJobs = sqliteTable('usenet_jobs', {
 export type UsenetJob = typeof usenetJobs.$inferSelect;
 export type NewUsenetJob = typeof usenetJobs.$inferInsert;
 
+export const DOWNLOAD_JOB_STATES = [
+  'pending',
+  'downloading',
+  'completed',
+  'error',
+  'cancelled',
+] as const;
+
+export type DownloadJobState = (typeof DOWNLOAD_JOB_STATES)[number];
+
+export const DOWNLOAD_NON_TERMINAL_STATES: DownloadJobState[] = ['pending', 'downloading'];
+
+export const downloadJobs = sqliteTable('download_jobs', {
+  id: text('id').primaryKey(),
+  url: text('url').notNull(),
+  status: text('status', { enum: DOWNLOAD_JOB_STATES }).notNull().default('pending'),
+  progress: integer('progress').notNull().default(0),
+  resolution: integer('resolution'),
+  allEpisodes: integer('all_episodes', { mode: 'boolean' }).notNull().default(false),
+  autoPostUsenet: integer('auto_post_usenet', { mode: 'boolean' }).notNull().default(false),
+  output: text('output'),
+  error: text('error'),
+  outputDir: text('output_dir'),
+  files: text('files'),
+  logs: text('logs'),
+  startTime: integer('start_time'),
+  endTime: integer('end_time'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type DownloadJobRow = typeof downloadJobs.$inferSelect;
+export type NewDownloadJobRow = typeof downloadJobs.$inferInsert;
+
 export const appSettings = sqliteTable('app_settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),

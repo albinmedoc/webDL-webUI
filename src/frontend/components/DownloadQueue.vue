@@ -4,10 +4,6 @@
       <h5 class="card-title mb-0">
         <i class="bi bi-list-task me-2"></i>
         Download Queue
-        <small v-if="hasPersistedJobs" class="ms-2 badge bg-light text-success">
-          <i class="bi bi-save me-1"></i>
-          Persistent
-        </small>
       </h5>
       <div class="d-flex gap-2">
         <button
@@ -60,10 +56,6 @@
         <i class="bi bi-inbox display-4 d-block mb-3 text-muted"></i>
         <p class="mb-2">No downloads yet.</p>
         <small class="d-block mb-2">Add a URL above to get started!</small>
-        <small class="text-info">
-          <i class="bi bi-info-circle me-1"></i>
-          Downloads persist across browser sessions
-        </small>
       </div>
 
       <div v-else class="list-group list-group-flush">
@@ -191,33 +183,26 @@
               </div>
 
               <!-- Job Options Summary -->
-              <div class="d-flex flex-wrap gap-1 mb-0" v-if="job.options">
+              <div class="d-flex flex-wrap gap-1 mb-0">
                 <span
-                  v-if="job.options.allEpisodes"
+                  v-if="job.allEpisodes"
                   class="badge bg-primary"
                 >
                   <i class="bi bi-collection-play me-1"></i>
                   All Episodes
                 </span>
                 <span
-                  v-if="job.options.resolution"
+                  v-if="job.resolution"
                   class="badge bg-secondary"
                 >
-                  {{ job.options.resolution }}p
+                  {{ job.resolution }}p
                 </span>
                 <span
-                  v-if="job.options.token"
-                  class="badge bg-dark"
+                  v-if="job.autoPostUsenet"
+                  class="badge bg-info"
                 >
-                  <i class="bi bi-key me-1"></i>
-                  Token Auth
-                </span>
-                <span
-                  v-if="job.options.username"
-                  class="badge bg-warning text-dark"
-                >
-                  <i class="bi bi-person me-1"></i>
-                  User Auth
+                  <i class="bi bi-cloud-upload me-1"></i>
+                  Auto-post Usenet
                 </span>
               </div>
             </div>
@@ -281,7 +266,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useDownloadStore } from '../stores/downloadStore'
 import { useUsenetStore } from '../stores/usenetStore'
 
@@ -302,10 +287,6 @@ const basename = (p: string): string => {
   return parts[parts.length - 1] || p
 }
 
-const hasPersistedJobs = computed(() => {
-  return downloadStore.jobs.length > 0
-})
-
 // Close dropdown when clicking outside
 const handleClickOutside = (event: Event) => {
   const target = event.target as HTMLElement
@@ -322,9 +303,9 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
 
-const formatTime = (date?: Date): string => {
-  if (!date) return ''
-  return date.toLocaleTimeString()
+const formatTime = (timestamp?: number | null): string => {
+  if (!timestamp) return ''
+  return new Date(timestamp).toLocaleTimeString()
 }
 
 const toggleLogs = (jobId: string) => {

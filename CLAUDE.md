@@ -56,7 +56,7 @@ The REST endpoints (`/api/health`, `/api/check-svtplay-dl`, `POST /api/download`
 
 ### Frontend State
 
-`downloadStore.ts` is the central Pinia store. It manages the Socket.IO connection, download jobs, and persists job state to localStorage for session survival. Jobs auto-sync with the server on reconnect.
+`downloadStore.ts` is the central Pinia store. It manages the Socket.IO connection and mirrors the server's `download_jobs` table — jobs are not persisted in the browser. On (re)connect the store emits `sync-downloads` and the backend replies with the full list (`download-jobs-sync`); incremental changes flow as `download-job-upserted` / `download-job-deleted` events.
 
 ### Key Details
 

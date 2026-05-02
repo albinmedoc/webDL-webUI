@@ -52,14 +52,10 @@ export class ProgressParser {
 
 export class ValidationUtils {
   static validateDownloadRequest(data: Partial<DownloadRequest>): ValidationResult {
-    const { url, downloadId } = data;
+    const { url } = data;
 
     if (!url) {
       return { valid: false, error: 'URL is required' };
-    }
-
-    if (!downloadId) {
-      return { valid: false, error: 'Download ID is required' };
     }
 
     let parsed: URL;

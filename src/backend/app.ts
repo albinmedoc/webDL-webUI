@@ -9,6 +9,7 @@ import { config } from './config/config.js';
 import { usenetConfig } from './config/usenetConfig.js';
 import { runMigrations } from './db/client.js';
 import { loadOverridesFromDb } from './services/settingsService.js';
+import { recoverInterruptedJobs as recoverInterruptedDownloadJobs } from './services/downloadJobsService.js';
 import { recoverInterruptedJobs } from './services/usenetRecoveryService.js';
 import { startRetentionScheduler } from './services/usenet/nzbRetention.js';
 import { detectTools } from './services/usenet/tools.js';
@@ -35,6 +36,7 @@ export function createApp(): AppComponents {
   // an existing directory, so ensure the configured download dir exists.
   fs.mkdirSync(config.downloadOutputDir, { recursive: true });
   recoverInterruptedJobs();
+  recoverInterruptedDownloadJobs();
 
   if (usenetConfig.enabled) {
     logger.info('Usenet upload pipeline enabled', {

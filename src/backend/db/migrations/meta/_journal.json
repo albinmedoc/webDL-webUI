@@ -15,6 +15,13 @@
       "when": 1777483529622,
       "tag": "0001_pink_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777716330801,
+      "tag": "0002_happy_jimmy_woo",
+      "breakpoints": true
     }
   ]
 }

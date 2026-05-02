@@ -1,7 +1,6 @@
 export interface DownloadRequest {
   url: string;
   args: string[];
-  downloadId: string;
   autoPostUsenet?: boolean;
 }
 
