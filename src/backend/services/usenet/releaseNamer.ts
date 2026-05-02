@@ -170,6 +170,9 @@ export async function applyReleaseNaming(
     date: parsed.date ?? '',
     quality,
     codec,
+    // No probed language → empty token; renderReleaseName drops the segment
+    // so we don't lie about the audio language.
+    language: probed?.language ?? '',
     group: usenetConfig.releaseGroup,
   };
 
