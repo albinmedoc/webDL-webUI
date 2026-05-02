@@ -10,6 +10,8 @@
   },
   "remoteUser": "node",
   "containerEnv": {
+    "DOWNLOAD_OUTPUT_DIR": "/workspaces/svtplay-dl-webui/data/downloads",
+    "UPLOAD_WATCH_DIR": "/workspaces/svtplay-dl-webui/data/upload",
     "USENET_WORK_DIR": "/workspaces/svtplay-dl-webui/data/work",
     "DB_PATH": "/workspaces/svtplay-dl-webui/data/svtplay-dl-webui.db",
     "NZB_OUTPUT_DIR": "/workspaces/svtplay-dl-webui/data/nzb"
