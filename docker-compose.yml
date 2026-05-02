@@ -51,8 +51,7 @@ services:
       # ───────────────────── Indexer hook ──────────────────────
       # Bundled hooks (see hooks/indexers/ in the repo):
       # - INDEXER_HOOK_SCRIPT=/app/hooks/indexers/drunkenslug.sh
-      # - DRUNKENSLUG_API_KEY=your-api-key
-      # - DRUNKENSLUG_API_URL=https://drunkenslug.com/api
+      # - DRUNKENSLUG_UPLOAD_URL=https://nzbs.drunkenslug.com/upload.php
 
       # Custom paths (defaults point inside /data; override only if needed):
       # - DB_PATH=/data/svtplay-dl-webui.db

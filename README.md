@@ -142,8 +142,9 @@ and the failure was in `indexing`) or redo the whole upload.
    bundled.
 3. Optionally point `INDEXER_HOOK_SCRIPT` at a hook in
    [`hooks/indexers/`](hooks/indexers/) (e.g.
-   `/app/hooks/indexers/drunkenslug.sh` plus `DRUNKENSLUG_API_KEY`),
-   or a custom script following the same env-var contract.
+   `/app/hooks/indexers/drunkenslug.sh`, which uses the public bulk
+   uploader and needs no API key), or a custom script following the
+   same env-var contract.
 4. Open the gear icon in the nav bar → **Test NNTP** to verify the
    connection before the first real upload.
 5. On the Downloads page, tick **Auto-post to Usenet after download**;
@@ -197,16 +198,17 @@ Anything written to stdout is recorded as the job's `indexerResponse`
 and shown in the History view.
 
 **Bundled hooks** live in [`hooks/indexers/`](hooks/indexers/) and are
-copied into the image at `/app/hooks/indexers/`, so a working setup is
-usually two env vars away:
+copied into the image at `/app/hooks/indexers/`. The drunkenslug hook
+uses the public bulk uploader (no API key required) and reads the RAR
+password out of the NZB's `<meta type="password">` tag, so a working
+setup is one env var away:
 
 ```yaml
 - INDEXER_HOOK_SCRIPT=/app/hooks/indexers/drunkenslug.sh
-- DRUNKENSLUG_API_KEY=your-api-key
 ```
 
 For a custom indexer, drop a script alongside the bundled ones (same
-contract, its own `<INDEXER>_API_KEY`/`<INDEXER>_API_URL` env vars) and
+contract, its own per-indexer env vars for any URL/key it needs) and
 point `INDEXER_HOOK_SCRIPT` at it.
 
 `INDEXER_CATEGORY` is auto-detected from the svtplay-dl filename and set
