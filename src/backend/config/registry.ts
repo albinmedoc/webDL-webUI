@@ -67,7 +67,7 @@ export const REGISTRY = defineRegistry({
 
   // Usenet — release naming
   releaseGroup:          { key: 'releaseGroup',          envVar: 'USENET_RELEASE_GROUP',            group: 'release',    kind: 'string',  default: 'SVTDL'                                },
-  releaseNameTemplate:   { key: 'releaseNameTemplate',   envVar: 'USENET_RELEASE_NAME_TEMPLATE',    group: 'release',    kind: 'string',  default: '{show}.S{season}E{episode}.{quality}.WEB-DL.h264-{group}' },
+  releaseNameTemplate:   { key: 'releaseNameTemplate',   envVar: 'USENET_RELEASE_NAME_TEMPLATE',    group: 'release',    kind: 'string',  default: '{show}.S{season}E{episode}.{quality}.WEB-DL.{codec}-{group}' },
 
   // Usenet — work directory
   workDir:               { key: 'workDir',               envVar: 'USENET_WORK_DIR',                 group: 'workdir',    kind: 'string',  default: '/data/work'                           },

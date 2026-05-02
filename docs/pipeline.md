@@ -89,14 +89,26 @@ require scene-style naming.
 The `-{8+ chars}-{service}` id+service trailer (e.g. `-abc123-svtplay`)
 is stripped conservatively before captured tokens are normalised.
 
+When the SVT URL has no `-sasong-N-` segment, svtplay-dl falls back to
+`productionYear` for the season (e.g. `dips.s2019e01.…`). The parser
+detects 4-digit "year-shaped" season values (≥ 1900), rewrites the
+season to `01`, and surfaces the original year via the `{year}` token.
+
 The captured tokens are substituted into `USENET_RELEASE_NAME_TEMPLATE`
-(default `{show}.S{season}E{episode}.{quality}.WEB-DL.h264-{group}`).
+(default `{show}.S{season}E{episode}.{quality}.WEB-DL.{codec}-{group}`).
 Empty token scaffolds are dropped: a movie ends up as
 `Show.Name.1080p.WEB-DL.h264-SVTDL.mp4` (the literal `S` and `E` from
 the template are filtered out when both are unfilled).
 
+`{quality}` and `{codec}` come from an `ffprobe` pass on the actual file
+(`mediaProbe.ts`). The probed height (e.g. `1080p`) is used when no
+`--resolution` flag was passed to `svtplay-dl`, and the codec is mapped
+from libav's name to the scene-tag form (`hevc` → `h265`, `mpeg4` →
+`xvid`, etc.). If `ffprobe` is missing or the file can't be probed, the
+quality token is left empty and the codec falls back to `h264`.
+
 **Available tokens:** `{show}`, `{season}`, `{episode}`, `{title}`,
-`{year}`, `{date}`, `{quality}`, `{group}` (= `USENET_RELEASE_GROUP`,
+`{year}`, `{date}`, `{quality}`, `{codec}`, `{group}` (= `USENET_RELEASE_GROUP`,
 default `SVTDL`).
 
 **Caveat.** The default template doesn't include `{date}`, so dated

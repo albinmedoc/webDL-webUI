@@ -4,9 +4,13 @@ import path from 'path';
 import { usenetConfig } from '../../config/usenetConfig.js';
 import { logger } from '../../utils/logger.js';
 
+import { probeMedia } from './mediaProbe.js';
+
 export interface ReleaseNamingInput {
   quality?: string | null;
 }
+
+const DEFAULT_CODEC = 'h264';
 
 interface ParsedName {
   show: string;
@@ -63,16 +67,22 @@ export function parseSvtplayDlFilename(filename: string): ParsedName | null {
   // Pattern 1: SxxExx with optional title trailer.
   //   programname.s01e02.episode_name-abc123-svtplay
   //   programname-s01e02
-  const seasonEp = noExt.match(/^(.+?)[\-.\s]+s(\d{1,2})e(\d{1,3})(?:[\-.\s]+(.+?))?$/i);
+  // svtplay-dl falls back to productionYear when the SVT URL lacks
+  // -sasong-N-, so we tolerate up to 4 digits in the season and rewrite
+  // year-shaped values to "01" (most missing-season URLs are season 1).
+  const seasonEp = noExt.match(/^(.+?)[\-.\s]+s(\d{1,4})e(\d{1,3})(?:[\-.\s]+(.+?))?$/i);
   if (seasonEp) {
     const showRaw = seasonEp[1];
     const trailer = seasonEp[4] ? stripIdServiceSuffix(seasonEp[4]) : '';
     const titleClean = trailer ? normaliseName(trailer) : '';
+    const rawSeason = parseInt(seasonEp[2], 10);
+    const seasonIsYear = rawSeason >= 1900;
     return {
       show: normaliseName(showRaw),
-      season: seasonEp[2].padStart(2, '0'),
+      season: seasonIsYear ? '01' : seasonEp[2].padStart(2, '0'),
       episode: seasonEp[3].padStart(2, '0'),
       title: titleClean || undefined,
+      year: seasonIsYear ? String(rawSeason) : undefined,
     };
   }
 
@@ -139,6 +149,18 @@ export async function applyReleaseNaming(
     return mediaPath;
   }
 
+  // Probe the media for codec + height so the release name reflects the
+  // actual content rather than a hard-coded "h264.1080p". Failure to probe
+  // (no ffprobe, unreadable file) falls back to the user-supplied --resolution
+  // value and a sensible codec default — never blocks naming.
+  const probed = await probeMedia(mediaPath);
+  const quality = input.quality
+    ? `${input.quality}p`
+    : probed?.height
+      ? `${probed.height}p`
+      : '';
+  const codec = probed?.codec ?? DEFAULT_CODEC;
+
   const tokens: Record<string, string> = {
     show: parsed.show,
     season: parsed.season ?? '',
@@ -146,7 +168,8 @@ export async function applyReleaseNaming(
     title: parsed.title ?? '',
     year: parsed.year ?? '',
     date: parsed.date ?? '',
-    quality: input.quality ? `${input.quality}p` : '',
+    quality,
+    codec,
     group: usenetConfig.releaseGroup,
   };
 
