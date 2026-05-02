@@ -14,7 +14,7 @@ import {
 import { probeQualities } from '../services/qualityProbe.js';
 import { probeNntp } from '../services/usenet/nntpProbe.js';
 import { detectTools } from '../services/usenet/tools.js';
-import { deleteJob, getJob, listJobsPaginated } from '../services/usenetService.js';
+import { deleteJob, deleteJobs, getJob, listJobsPaginated } from '../services/usenetService.js';
 import { logger } from '../utils/logger.js';
 
 export function setupMiddleware(app: Application, rootDir: string): void {
@@ -132,6 +132,20 @@ export function setupRoutes(app: Application, rootDir: string): void {
       return;
     }
     res.json(job);
+  });
+
+  app.post('/api/usenet/jobs/bulk-delete', async (req: Request, res: Response) => {
+    if (!usenetConfig.enabled) {
+      res.status(404).json({ error: 'Usenet feature is disabled' });
+      return;
+    }
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : null;
+    if (!ids || ids.length === 0 || !ids.every((id: unknown) => typeof id === 'string')) {
+      res.status(400).json({ error: 'request body must be { ids: string[] }' });
+      return;
+    }
+    const result = await deleteJobs(ids as string[]);
+    res.json(result);
   });
 
   app.delete('/api/usenet/jobs/:id', async (req: Request, res: Response) => {

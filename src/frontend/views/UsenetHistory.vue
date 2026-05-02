@@ -54,6 +54,36 @@
           {{ errorMessage }}
         </div>
 
+        <div
+          v-if="selectedIds.size > 0"
+          class="d-flex align-items-center gap-2 mb-2 p-2 bg-light border rounded small"
+        >
+          <span class="me-2">
+            <strong>{{ selectedIds.size }}</strong> selected
+          </span>
+          <button
+            class="btn btn-outline-primary btn-sm"
+            :disabled="bulkBusy || selectedDownloadableCount === 0"
+            @click="bulkDownloadNzbs"
+            :title="`Download ${selectedDownloadableCount} NZB file(s)`"
+          >
+            <i class="bi bi-file-earmark-zip me-1"></i>
+            Download NZBs ({{ selectedDownloadableCount }})
+          </button>
+          <button
+            class="btn btn-outline-danger btn-sm"
+            :disabled="bulkBusy || selectedDeletableCount === 0"
+            @click="bulkDelete"
+            :title="`Delete ${selectedDeletableCount} terminal job(s)`"
+          >
+            <i class="bi bi-trash me-1"></i>
+            Delete ({{ selectedDeletableCount }})
+          </button>
+          <button class="btn btn-link btn-sm ms-auto" :disabled="bulkBusy" @click="clearSelection">
+            Clear selection
+          </button>
+        </div>
+
         <div v-if="loading && jobs.length === 0" class="text-center py-5 text-muted">
           <div class="spinner-border text-info" role="status"></div>
           <div class="mt-2">Loading…</div>
@@ -68,6 +98,17 @@
           <table class="table table-sm table-hover align-middle">
             <thead class="table-light">
               <tr>
+                <th style="width: 32px">
+                  <input
+                    type="checkbox"
+                    class="form-check-input"
+                    :checked="allOnPageSelected"
+                    :indeterminate.prop="someOnPageSelected && !allOnPageSelected"
+                    @change="toggleSelectAllOnPage"
+                    :disabled="jobs.length === 0"
+                    title="Select all on this page"
+                  />
+                </th>
                 <th style="min-width: 220px">File</th>
                 <th>State</th>
                 <th>Progress</th>
@@ -77,7 +118,15 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="job in jobs" :key="job.id">
+              <tr v-for="job in jobs" :key="job.id" :class="{ 'table-active': selectedIds.has(job.id) }">
+                <td>
+                  <input
+                    type="checkbox"
+                    class="form-check-input"
+                    :checked="selectedIds.has(job.id)"
+                    @change="toggleOne(job.id)"
+                  />
+                </td>
                 <td>
                   <div class="text-truncate" style="max-width: 360px" :title="job.mediaPath">
                     <i class="bi bi-file-earmark-play me-1 text-muted"></i>
@@ -223,9 +272,24 @@ const passwordVisible = ref<Record<string, boolean>>({})
 const passwordCache = ref<Record<string, string>>({})
 const deletingId = ref<string | null>(null)
 
+const selectedIds = ref<Set<string>>(new Set())
+const bulkBusy = ref(false)
+
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const rangeStart = computed(() => (total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1))
 const rangeEnd = computed(() => Math.min(total.value, page.value * pageSize.value))
+
+const selectedJobs = computed(() => jobs.value.filter((j) => selectedIds.value.has(j.id)))
+const selectedDownloadableCount = computed(
+  () => selectedJobs.value.filter((j) => !!j.nzbPath).length,
+)
+const selectedDeletableCount = computed(
+  () => selectedJobs.value.filter((j) => isTerminal(j.state)).length,
+)
+const allOnPageSelected = computed(
+  () => jobs.value.length > 0 && jobs.value.every((j) => selectedIds.value.has(j.id)),
+)
+const someOnPageSelected = computed(() => jobs.value.some((j) => selectedIds.value.has(j.id)))
 
 function isTerminal(state: UsenetState): boolean {
   return TERMINAL.includes(state)
@@ -260,12 +324,103 @@ async function fetchHistory(): Promise<void> {
 
 function applyFilters(): void {
   page.value = 1
+  clearSelection()
   fetchHistory()
+}
+
+function toggleOne(id: string): void {
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
+
+function toggleSelectAllOnPage(): void {
+  const next = new Set(selectedIds.value)
+  if (allOnPageSelected.value) {
+    for (const j of jobs.value) next.delete(j.id)
+  } else {
+    for (const j of jobs.value) next.add(j.id)
+  }
+  selectedIds.value = next
+}
+
+function clearSelection(): void {
+  selectedIds.value = new Set()
+}
+
+function triggerNzbDownload(jobId: string, filename: string): void {
+  const a = document.createElement('a')
+  a.href = `/api/usenet/jobs/${jobId}/nzb`
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+async function bulkDownloadNzbs(): Promise<void> {
+  const targets = selectedJobs.value.filter((j) => !!j.nzbPath)
+  if (targets.length === 0) return
+  bulkBusy.value = true
+  try {
+    for (const job of targets) {
+      triggerNzbDownload(job.id, basename(job.nzbPath))
+      // Stagger so the browser doesn't drop concurrent download requests.
+      await new Promise((r) => setTimeout(r, 150))
+    }
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+async function bulkDelete(): Promise<void> {
+  const targets = selectedJobs.value.filter((j) => isTerminal(j.state))
+  if (targets.length === 0) return
+  if (
+    !window.confirm(
+      `Delete ${targets.length} job(s)? Their NZB files on disk will also be removed.`,
+    )
+  ) {
+    return
+  }
+  bulkBusy.value = true
+  errorMessage.value = null
+  try {
+    const res = await fetch('/api/usenet/jobs/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: targets.map((j) => j.id) }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `HTTP ${res.status}`)
+    }
+    const data = (await res.json()) as {
+      deleted: string[]
+      skipped: { id: string; reason: string }[]
+    }
+    for (const id of data.deleted) {
+      delete passwordVisible.value[id]
+      delete passwordCache.value[id]
+    }
+    if (data.skipped.length > 0) {
+      errorMessage.value = `Skipped ${data.skipped.length} job(s): ${data.skipped
+        .map((s) => `${s.id.slice(0, 8)} (${s.reason})`)
+        .join(', ')}`
+    }
+    clearSelection()
+    await fetchHistory()
+  } catch (err) {
+    errorMessage.value = `Bulk delete failed: ${(err as Error).message}`
+  } finally {
+    bulkBusy.value = false
+  }
 }
 
 function goTo(target: number): void {
   if (target < 1 || target > totalPages.value || loading.value) return
   page.value = target
+  clearSelection()
   fetchHistory()
 }
 

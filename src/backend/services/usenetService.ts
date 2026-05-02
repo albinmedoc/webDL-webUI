@@ -292,6 +292,24 @@ export async function deleteJob(
   return { deleted: true };
 }
 
+export interface BulkDeleteResult {
+  deleted: string[];
+  skipped: { id: string; reason: string; state?: UsenetJobState }[];
+}
+
+export async function deleteJobs(jobIds: string[]): Promise<BulkDeleteResult> {
+  const result: BulkDeleteResult = { deleted: [], skipped: [] };
+  for (const id of jobIds) {
+    const r = await deleteJob(id);
+    if (r.deleted) {
+      result.deleted.push(id);
+    } else {
+      result.skipped.push({ id, reason: r.reason ?? 'unknown', state: r.state });
+    }
+  }
+  return result;
+}
+
 export function startupKick(): void {
   const queued = getDb().select().from(usenetJobs).where(inArray(usenetJobs.state, ['queued'])).all();
   if (queued.length === 0) return;
