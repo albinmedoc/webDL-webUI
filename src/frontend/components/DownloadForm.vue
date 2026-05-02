@@ -221,6 +221,8 @@ const onUrlBlur = () => {
   void downloadStore.probeUrl(url.value)
 }
 
+const emit = defineEmits<{ submitted: [] }>()
+
 const handleSubmit = async () => {
   if (!url.value) return
 
@@ -229,6 +231,7 @@ const handleSubmit = async () => {
     await downloadStore.addDownloadJob(url.value)
     url.value = ''
     downloadStore.resetProbe()
+    emit('submitted')
   } catch (error) {
     console.error('Failed to add download:', error)
   } finally {
