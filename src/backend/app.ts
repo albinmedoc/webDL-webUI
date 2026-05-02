@@ -17,6 +17,7 @@ import { startUploadWatcher } from './services/uploadWatcher.js';
 import { startupKick as kickUsenetQueue } from './services/usenetService.js';
 import { setupMiddleware, setupRoutes } from './middleware/setup.js';
 import { SocketController } from './controllers/socketController.js';
+import { writeSvtplayDlConfig } from './services/svtplayDlConfig.js';
 import { logger } from './utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,9 +33,10 @@ export interface AppComponents {
 export function createApp(): AppComponents {
   runMigrations();
   loadOverridesFromDb();
-  // svtplay-dl's `-o` flag treats the path as a filename prefix unless it's
-  // an existing directory, so ensure the configured download dir exists.
+  // svtplay-dl resolves `path:` against cwd, so the configured download dir
+  // must exist before we spawn the first download.
   fs.mkdirSync(config.downloadOutputDir, { recursive: true });
+  writeSvtplayDlConfig();
   recoverInterruptedJobs();
   recoverInterruptedDownloadJobs();
 

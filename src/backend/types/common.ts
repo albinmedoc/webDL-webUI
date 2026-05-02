@@ -2,6 +2,8 @@ export interface ServerConfig {
   port: number;
   downloadOutputDir: string;
   uploadWatchDir: string;
+  svtplaydlFilenameTemplate: string;
+  svtplaydlProxy: string;
   cors: {
     origin: string;
     methods: string[];

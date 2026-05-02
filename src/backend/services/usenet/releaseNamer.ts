@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
+import { config as serverConfig } from '../../config/config.js';
 import { usenetConfig } from '../../config/usenetConfig.js';
 import { logger } from '../../utils/logger.js';
 
@@ -60,7 +61,75 @@ export function detectNewznabCategory(filename: string): string {
   return NEWZNAB_MOVIES_FOREIGN;
 }
 
+// Per-token regex shapes for compileTemplateRegex(). Tokens not listed here
+// fall through to a non-greedy `.+?` group.
+const TOKEN_REGEX: Record<string, string> = {
+  season: '\\d{1,4}',
+  episode: '\\d{1,3}',
+  id: '[A-Za-z0-9]+',
+  service: '[A-Za-z]+',
+  ext: '[A-Za-z0-9]+',
+};
+
+const TEMPLATE_TOKEN = /\{(\w+)\}/g;
+
+interface CompiledTemplate {
+  regex: RegExp;
+  tokens: string[];
+}
+
+function escapeRegexLiterals(s: string): string {
+  // Escape every regex metachar except `{` and `}`, which we replace below.
+  return s.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
+}
+
+function compileTemplateRegex(template: string): CompiledTemplate {
+  const tokens: string[] = [];
+  let pattern = '';
+  let cursor = 0;
+  for (const m of template.matchAll(TEMPLATE_TOKEN)) {
+    const idx = m.index ?? 0;
+    pattern += escapeRegexLiterals(template.slice(cursor, idx));
+    const name = m[1];
+    tokens.push(name);
+    pattern += `(?<${name}>${TOKEN_REGEX[name] ?? '.+?'})`;
+    cursor = idx + m[0].length;
+  }
+  pattern += escapeRegexLiterals(template.slice(cursor));
+  return { regex: new RegExp(`^${pattern}$`, 'i'), tokens };
+}
+
+function parseFromTemplate(filename: string, template: string): ParsedName | null {
+  const compiled = compileTemplateRegex(template);
+  const m = filename.match(compiled.regex);
+  if (!m || !m.groups) return null;
+  const g = m.groups;
+  const showRaw = g.title ?? '';
+  if (!showRaw) return null;
+
+  // svtplay-dl falls back to productionYear when the SVT URL lacks
+  // -sasong-N-, so a 4-digit season probably means "no real season". Rewrite
+  // year-shaped values to "01" (most missing-season URLs are season 1) and
+  // surface the year separately.
+  const rawSeason = g.season ? parseInt(g.season, 10) : NaN;
+  const seasonIsYear = Number.isFinite(rawSeason) && rawSeason >= 1900;
+
+  return {
+    show: normaliseName(showRaw),
+    season: g.season ? (seasonIsYear ? '01' : g.season.padStart(2, '0')) : undefined,
+    episode: g.episode ? g.episode.padStart(2, '0') : undefined,
+    title: g.episodename ? normaliseName(g.episodename) : undefined,
+    year: seasonIsYear ? String(rawSeason) : undefined,
+  };
+}
+
 export function parseSvtplayDlFilename(filename: string): ParsedName | null {
+  // Files produced under our auto-generated svtplay-dl config follow a known
+  // template, so try that first for a deterministic parse. Falls back to the
+  // legacy heuristics for anything dropped manually into the upload watch dir.
+  const fromTemplate = parseFromTemplate(filename, serverConfig.svtplaydlFilenameTemplate);
+  if (fromTemplate) return fromTemplate;
+
   const noExt = filename.replace(/\.[^.]+$/, '');
   if (!noExt) return null;
 

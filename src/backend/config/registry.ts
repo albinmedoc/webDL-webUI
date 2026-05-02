@@ -82,6 +82,13 @@ export const REGISTRY = defineRegistry({
 
   // Watch folder for usenet uploads. Anything dropped here gets posted.
   uploadWatchDir:        { key: 'uploadWatchDir',        envVar: 'UPLOAD_WATCH_DIR',                group: 'download',   kind: 'string',  default: '/data/upload'                         },
+
+  // svtplay-dl filename template (written into ~/.config/svtplay-dl/svtplay-dl.yaml).
+  // Tokens: {title} {season} {episode} {episodename} {id} {service} {ext}.
+  svtplaydlFilenameTemplate: { key: 'svtplaydlFilenameTemplate', envVar: 'SVTPLAYDL_FILENAME_TEMPLATE', group: 'download', kind: 'string', default: '{title}.s{season}e{episode}.{episodename}-{id}-{service}.{ext}' },
+
+  // Optional HTTP/HTTPS/SOCKS proxy passed to svtplay-dl. Empty = no proxy.
+  svtplaydlProxy:        { key: 'svtplaydlProxy',        envVar: 'SVTPLAYDL_PROXY',                 group: 'download',   kind: 'string',  default: '', sensitive: true                    },
 });
 
 export type RegistryKey = keyof typeof REGISTRY;

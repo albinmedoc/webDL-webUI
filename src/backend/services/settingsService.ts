@@ -13,7 +13,17 @@ import { indexerConfig, usenetConfig } from '../config/usenetConfig.js';
 import { getDb } from '../db/client.js';
 import { appSettings } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
+import { writeSvtplayDlConfig } from './svtplayDlConfig.js';
 import { logger } from '../utils/logger.js';
+
+// Keys whose values flow into ~/.config/svtplay-dl/svtplay-dl.yaml. Mutating
+// any of these requires regenerating the file so the next `svtplay-dl` spawn
+// picks up the change.
+const SVTPLAYDL_CONFIG_KEYS: readonly RegistryKey[] = [
+  'downloadOutputDir',
+  'svtplaydlFilenameTemplate',
+  'svtplaydlProxy',
+];
 
 /**
  * Whether each registry key is currently pinned by an environment variable.
@@ -45,6 +55,14 @@ function applyToSingleton(key: RegistryKey, value: unknown): void {
     serverConfig.uploadWatchDir = path.resolve(value as string);
     return;
   }
+  if (key === 'svtplaydlFilenameTemplate') {
+    serverConfig.svtplaydlFilenameTemplate = value as string;
+    return;
+  }
+  if (key === 'svtplaydlProxy') {
+    serverConfig.svtplaydlProxy = value as string;
+    return;
+  }
 
   switch (key) {
     case 'hookScript':
@@ -66,6 +84,8 @@ function applyToSingleton(key: RegistryKey, value: unknown): void {
 function readEffective(key: RegistryKey): unknown {
   if (key === 'downloadOutputDir') return serverConfig.downloadOutputDir;
   if (key === 'uploadWatchDir') return serverConfig.uploadWatchDir;
+  if (key === 'svtplaydlFilenameTemplate') return serverConfig.svtplaydlFilenameTemplate;
+  if (key === 'svtplaydlProxy') return serverConfig.svtplaydlProxy;
   switch (key) {
     case 'hookScript':
     case 'nzbOutputDir':
@@ -200,6 +220,10 @@ export function updateSettings(
     logger.info('Applied settings update', { keys: applied });
   }
 
+  if (applied.some((k) => SVTPLAYDL_CONFIG_KEYS.includes(k))) {
+    writeSvtplayDlConfig();
+  }
+
   return { applied, rejected };
 }
 
@@ -214,4 +238,7 @@ export function clearOverride(key: RegistryKey): void {
   const entry = REGISTRY[key];
   const value = parseValue(entry, process.env[entry.envVar]);
   applyToSingleton(key, value);
+  if (SVTPLAYDL_CONFIG_KEYS.includes(key)) {
+    writeSvtplayDlConfig();
+  }
 }

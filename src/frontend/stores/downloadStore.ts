@@ -284,7 +284,7 @@ export const useDownloadStore = defineStore('download', () => {
       args.push('--resolution', String(options.resolution))
     }
 
-    args.push('--subfolder', '-S', '-M', '--output-format', 'mkv')
+    args.push('--subfolder', '-M', '--output-format', 'mkv')
 
     if (options.allEpisodes) args.push('-A')
 

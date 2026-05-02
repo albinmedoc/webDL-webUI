@@ -1,5 +1,4 @@
 import { Socket } from 'socket.io';
-import { config } from '../config/config.js';
 import { usenetConfig } from '../config/usenetConfig.js';
 import * as downloadService from '../services/downloadService.js';
 import * as downloadJobs from '../services/downloadJobsService.js';
@@ -9,10 +8,6 @@ import { DownloadRequest } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { handleError } from '../utils/errors.js';
 import { UsenetHandler } from './usenetHandler.js';
-
-function hasOutputFlag(args: string[]): boolean {
-  return args.some(arg => arg === '-o' || arg === '--output');
-}
 
 export interface DownloadJobOptions {
   resolution?: number | null;
@@ -83,9 +78,10 @@ export function createDownloadHandler(socket: Socket, usenetHandler: UsenetHandl
       }
 
       const { url } = data;
-      const args = hasOutputFlag(data.args)
-        ? data.args
-        : [...data.args, '-o', config.downloadOutputDir];
+      // Output dir + filename template now come from the auto-generated
+      // svtplay-dl config (~/.config/svtplay-dl/svtplay-dl.yaml). User-supplied
+      // -o on data.args still wins because CLI flags override the config.
+      const args = data.args;
 
       // Persist before spawning so the job is visible in the DB even if the
       // process fails to start. Credentials are intentionally NOT stored.

@@ -11,6 +11,14 @@ export const config: ServerConfig = {
   uploadWatchDir: path.resolve(
     parseValue(REGISTRY.uploadWatchDir, process.env[REGISTRY.uploadWatchDir.envVar]) as string,
   ),
+  svtplaydlFilenameTemplate: parseValue(
+    REGISTRY.svtplaydlFilenameTemplate,
+    process.env[REGISTRY.svtplaydlFilenameTemplate.envVar],
+  ) as string,
+  svtplaydlProxy: parseValue(
+    REGISTRY.svtplaydlProxy,
+    process.env[REGISTRY.svtplaydlProxy.envVar],
+  ) as string,
   cors: {
     origin: "http://localhost:5173",
     methods: ["GET", "POST"]
