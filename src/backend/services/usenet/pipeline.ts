@@ -226,7 +226,8 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineRes
               group: usenetConfig.groups[0] ?? '',
               mediaPath: job.mediaPath,
             },
-            signal
+            signal,
+            (line) => log(`[indexer] ${line}`)
           );
           if (!result.ok) {
             throw new StageError(

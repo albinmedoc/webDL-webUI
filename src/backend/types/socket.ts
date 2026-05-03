@@ -99,6 +99,7 @@ export interface UsenetJobSummary {
   error: string | null;
   indexerResponse: string | null;
   category: string | null;
+  logs: string[];
   createdAt: number;
   updatedAt: number;
 }

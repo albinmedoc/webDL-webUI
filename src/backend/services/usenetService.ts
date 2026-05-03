@@ -40,7 +40,41 @@ export type JobObserver = (jobId: string, event: JobObserverEvent, payload: unkn
 const active = new Map<string, ActivePipelineMeta>();
 const observers = new Set<JobObserver>();
 
+const LOG_LIMIT = 200;
+
+function parseLogs(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function appendLog(jobId: string, line: string): void {
+  const db = getDb();
+  const row = db
+    .select({ logs: usenetJobs.logs })
+    .from(usenetJobs)
+    .where(eq(usenetJobs.id, jobId))
+    .get();
+  if (!row) return;
+  const next = [...parseLogs(row.logs), line].slice(-LOG_LIMIT);
+  db.update(usenetJobs)
+    .set({ logs: JSON.stringify(next), updatedAt: Date.now() })
+    .where(eq(usenetJobs.id, jobId))
+    .run();
+}
+
 function notify(jobId: string, event: JobObserverEvent, payload: unknown): void {
+  if (event === 'log' && typeof payload === 'string') {
+    try {
+      appendLog(jobId, payload);
+    } catch (err) {
+      logger.warn('appendLog failed', { jobId, error: (err as Error).message });
+    }
+  }
   for (const cb of observers) {
     try {
       cb(jobId, event, payload);
@@ -171,6 +205,7 @@ export async function enqueueJob(input: EnqueueJobInput): Promise<UsenetJob> {
   getDb().insert(usenetJobs).values(newJob).run();
   logger.info('Usenet job enqueued', { id, mediaPath: input.mediaPath, mediaSizeBytes: mediaSize });
 
+  notify(id, 'log', `Job enqueued: ${path.basename(input.mediaPath)} (${mediaSize} bytes)`);
   notify(id, 'enqueued', null);
   scheduleNext();
 

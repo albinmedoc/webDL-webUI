@@ -19,6 +19,16 @@ import type {
 } from '../types/socket.js';
 import { logger } from '../utils/logger.js';
 
+function parseLogs(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function toSummary(job: UsenetJob): UsenetJobSummary {
   return {
     id: job.id,
@@ -32,6 +42,7 @@ function toSummary(job: UsenetJob): UsenetJobSummary {
     error: job.error,
     indexerResponse: job.indexerResponse,
     category: job.category,
+    logs: parseLogs(job.logs),
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
   };

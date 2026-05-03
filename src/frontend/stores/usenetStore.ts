@@ -34,13 +34,12 @@ export interface UsenetJobSummary {
   error: string | null
   indexerResponse: string | null
   category: string | null
+  logs: string[]
   createdAt: number
   updatedAt: number
 }
 
-export interface UsenetJob extends UsenetJobSummary {
-  logs: string[]
-}
+export type UsenetJob = UsenetJobSummary
 
 export interface ToolAvailability {
   rar: boolean
@@ -64,23 +63,28 @@ export const useUsenetStore = defineStore('usenet', () => {
     return jobs.value.findIndex((j) => j.id === jobId)
   }
 
-  function upsert(summary: UsenetJobSummary, log?: string): void {
+  function upsert(summary: UsenetJobSummary): void {
     const idx = findIndex(summary.id)
+    const incoming: UsenetJob = { ...summary, logs: summary.logs ?? [] }
     if (idx === -1) {
-      jobs.value.unshift({ ...summary, logs: log ? [log] : [] })
+      jobs.value.unshift(incoming)
     } else {
-      const existing = jobs.value[idx]
-      const logs = log ? [...existing.logs, log].slice(-LOG_LIMIT) : existing.logs
-      jobs.value[idx] = { ...existing, ...summary, logs }
+      jobs.value[idx] = { ...jobs.value[idx], ...incoming }
     }
   }
 
-  function patch(jobId: string, fields: Partial<UsenetJob>, log?: string): void {
+  function patch(jobId: string, fields: Partial<UsenetJob>): void {
+    const idx = findIndex(jobId)
+    if (idx === -1) return
+    jobs.value[idx] = { ...jobs.value[idx], ...fields }
+  }
+
+  function appendLog(jobId: string, line: string): void {
     const idx = findIndex(jobId)
     if (idx === -1) return
     const existing = jobs.value[idx]
-    const logs = log ? [...existing.logs, log].slice(-LOG_LIMIT) : existing.logs
-    jobs.value[idx] = { ...existing, ...fields, logs }
+    const logs = [...existing.logs, line].slice(-LOG_LIMIT)
+    jobs.value[idx] = { ...existing, logs }
   }
 
   function fetchHealth(): void {
@@ -115,7 +119,7 @@ export const useUsenetStore = defineStore('usenet', () => {
     if (!socket) return
 
     socket.on('usenet-enqueued', (data: { job: UsenetJobSummary }) => {
-      upsert(data.job, 'Job enqueued')
+      upsert(data.job)
     })
 
     socket.on(
@@ -126,16 +130,12 @@ export const useUsenetStore = defineStore('usenet', () => {
         failureState?: UsenetState | null
         error?: string | null
       }) => {
-        patch(
-          data.jobId,
-          {
-            state: data.state,
-            failureState: data.failureState ?? null,
-            error: data.error ?? null,
-            updatedAt: Date.now(),
-          },
-          `State → ${data.state}${data.error ? ` (${data.error})` : ''}`,
-        )
+        patch(data.jobId, {
+          state: data.state,
+          failureState: data.failureState ?? null,
+          error: data.error ?? null,
+          updatedAt: Date.now(),
+        })
       },
     )
 
@@ -144,26 +144,24 @@ export const useUsenetStore = defineStore('usenet', () => {
     })
 
     socket.on('usenet-log', (data: { jobId: string; line: string }) => {
-      patch(data.jobId, { updatedAt: Date.now() }, data.line)
+      appendLog(data.jobId, data.line)
+      patch(data.jobId, { updatedAt: Date.now() })
     })
 
     socket.on('usenet-completed', (data: { jobId: string; job: UsenetJobSummary | null }) => {
-      if (data.job) upsert(data.job, 'Completed')
+      if (data.job) upsert(data.job)
     })
 
     socket.on('usenet-sync', (data: { jobs: UsenetJobSummary[] }) => {
       jobs.value = data.jobs
-        .map((summary) => {
-          const existing = jobs.value.find((j) => j.id === summary.id)
-          return { ...summary, logs: existing?.logs ?? [] }
-        })
+        .map((summary) => ({ ...summary, logs: summary.logs ?? [] }))
         .sort((a, b) => b.createdAt - a.createdAt)
     })
 
     socket.on('usenet-error', (data: { jobId?: string; error: string }) => {
       lastError.value = data.error
       if (data.jobId) {
-        patch(data.jobId, { error: data.error, updatedAt: Date.now() }, `Error: ${data.error}`)
+        patch(data.jobId, { error: data.error, updatedAt: Date.now() })
       }
     })
 

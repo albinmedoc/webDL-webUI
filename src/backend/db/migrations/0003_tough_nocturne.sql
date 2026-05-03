@@ -1,0 +1,1 @@
+ALTER TABLE `usenet_jobs` ADD `logs` text;

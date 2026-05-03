@@ -37,6 +37,7 @@ export const usenetJobs = sqliteTable('usenet_jobs', {
   error: text('error'),
   indexerResponse: text('indexer_response'),
   category: text('category'),
+  logs: text('logs'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

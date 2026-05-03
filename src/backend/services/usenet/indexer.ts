@@ -57,10 +57,23 @@ function buildEnv(hookEnv: IndexerHookEnv): Record<string, string> {
   return env;
 }
 
+function makeLineSplitter(onLine: (line: string) => void): (chunk: string) => void {
+  let buf = '';
+  return (chunk: string) => {
+    buf += chunk;
+    const parts = buf.split(/\r?\n/);
+    buf = parts.pop() ?? '';
+    for (const line of parts) {
+      if (line.length > 0) onLine(line);
+    }
+  };
+}
+
 async function spawnHook(
   args: string[],
   extraEnv: Record<string, string>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onLine?: (line: string) => void
 ): Promise<IndexerHookResult> {
   const scriptPath = indexerConfig.hookScript;
   if (!scriptPath) {
@@ -77,12 +90,18 @@ async function spawnHook(
 
     let stdout = '';
     let stderr = '';
+    const feedOut = onLine ? makeLineSplitter(onLine) : null;
+    const feedErr = onLine ? makeLineSplitter(onLine) : null;
 
     proc.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
+      const s = chunk.toString();
+      stdout += s;
+      feedOut?.(s);
     });
     proc.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
+      const s = chunk.toString();
+      stderr += s;
+      feedErr?.(s);
     });
 
     proc.on('error', (err) => {
@@ -109,11 +128,15 @@ async function spawnHook(
   });
 }
 
-export async function runHook(hookEnv: IndexerHookEnv, signal?: AbortSignal): Promise<IndexerHookResult> {
+export async function runHook(
+  hookEnv: IndexerHookEnv,
+  signal?: AbortSignal,
+  onLine?: (line: string) => void
+): Promise<IndexerHookResult> {
   const env = buildEnv(hookEnv);
   logger.info('Running indexer hook', {
     script: indexerConfig.hookScript,
     env: maskEnv(env),
   });
-  return await spawnHook([], env, signal);
+  return await spawnHook([], env, signal, onLine);
 }

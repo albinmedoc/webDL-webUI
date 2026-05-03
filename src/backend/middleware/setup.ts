@@ -17,6 +17,16 @@ import { detectTools } from '../services/usenet/tools.js';
 import { deleteJob, deleteJobs, getJob, listJobsPaginated } from '../services/usenetService.js';
 import { logger } from '../utils/logger.js';
 
+function parseLogsField(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function setupMiddleware(app: Application, rootDir: string): void {
   // CORS middleware
   app.use(cors());
@@ -114,7 +124,10 @@ export function setupRoutes(app: Application, rootDir: string): void {
 
     const result = listJobsPaginated({ page, pageSize, state, search });
     res.json({
-      jobs: result.jobs.map(({ rarPassword: _omit, ...rest }) => rest),
+      jobs: result.jobs.map(({ rarPassword: _omit, logs, ...rest }) => ({
+        ...rest,
+        logs: parseLogsField(logs),
+      })),
       total: result.total,
       page: result.page,
       pageSize: result.pageSize,
@@ -131,7 +144,7 @@ export function setupRoutes(app: Application, rootDir: string): void {
       res.status(404).json({ error: 'job not found' });
       return;
     }
-    res.json(job);
+    res.json({ ...job, logs: parseLogsField(job.logs) });
   });
 
   app.post('/api/usenet/jobs/bulk-delete', async (req: Request, res: Response) => {

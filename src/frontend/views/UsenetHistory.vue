@@ -168,6 +168,13 @@
                   <div class="btn-group btn-group-sm" role="group">
                     <button
                       class="btn btn-outline-secondary"
+                      @click="openLogs(job)"
+                      :title="`View logs (${job.logs?.length ?? 0})`"
+                    >
+                      <i class="bi bi-terminal"></i>
+                    </button>
+                    <button
+                      class="btn btn-outline-secondary"
                       @click="togglePassword(job.id)"
                       title="Reveal RAR password"
                     >
@@ -210,6 +217,16 @@
           </table>
         </div>
 
+        <UsenetLogsModal
+          v-if="logsTarget"
+          :job-id="logsTarget.id"
+          :logs-override="logsTarget.logs ?? []"
+          :media-path="logsTarget.mediaPath"
+          :state="logsTarget.state"
+          :failure-state="logsTarget.failureState"
+          @close="logsTarget = null"
+        />
+
         <!-- Pagination -->
         <div v-if="jobs.length > 0" class="d-flex justify-content-between align-items-center mt-3">
           <small class="text-muted">
@@ -240,6 +257,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import UsenetLogsModal from '../components/UsenetLogsModal.vue'
 import { useUsenetStore, type UsenetJobSummary, type UsenetState } from '../stores/usenetStore'
 
 const ALL_STATES: UsenetState[] = [
@@ -274,6 +292,12 @@ const deletingId = ref<string | null>(null)
 
 const selectedIds = ref<Set<string>>(new Set())
 const bulkBusy = ref(false)
+
+const logsTarget = ref<UsenetJobSummary | null>(null)
+
+function openLogs(job: UsenetJobSummary): void {
+  logsTarget.value = job
+}
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const rangeStart = computed(() => (total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1))

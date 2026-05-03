@@ -79,18 +79,14 @@
                 </a>
               </div>
 
-              <div v-if="job.logs.length > 0" class="mb-1">
-                <button @click="toggleLogs(job.id)" class="btn btn-outline-secondary btn-sm">
-                  <i class="bi" :class="expandedLogs[job.id] ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
-                  {{ expandedLogs[job.id] ? 'Hide' : 'Show' }} Logs
+              <div class="mb-1">
+                <button @click="openLogs(job.id)" class="btn btn-outline-secondary btn-sm">
+                  <i class="bi bi-terminal me-1"></i>
+                  View logs
+                  <span v-if="job.logs.length > 0" class="badge bg-secondary ms-1">
+                    {{ job.logs.length }}
+                  </span>
                 </button>
-                <div
-                  v-if="expandedLogs[job.id]"
-                  class="mt-2 p-2 bg-dark text-info font-monospace small rounded"
-                  style="max-height: 120px; overflow-y: auto;"
-                >
-                  <div v-for="(log, i) in job.logs.slice(-30)" :key="i" style="white-space: pre-wrap;">{{ log }}</div>
-                </div>
               </div>
             </div>
 
@@ -116,6 +112,12 @@
         </div>
       </div>
     </div>
+
+    <UsenetLogsModal
+      v-if="logsJobId"
+      :job-id="logsJobId"
+      @close="logsJobId = null"
+    />
 
     <!-- Cancel-confirm modal -->
     <div v-if="cancelTarget" class="modal-backdrop-custom" @click.self="cancelTarget = null">
@@ -146,13 +148,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useUsenetStore, type UsenetJob, type UsenetState, NON_TERMINAL_STATES } from '../stores/usenetStore'
+import UsenetLogsModal from './UsenetLogsModal.vue'
 
 const usenetStore = useUsenetStore()
-const expandedLogs = ref<Record<string, boolean>>({})
+const logsJobId = ref<string | null>(null)
 const cancelTarget = ref<UsenetJob | null>(null)
 
-function toggleLogs(id: string) {
-  expandedLogs.value[id] = !expandedLogs.value[id]
+function openLogs(id: string) {
+  logsJobId.value = id
 }
 
 function canCancel(state: UsenetState): boolean {
