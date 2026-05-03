@@ -5,6 +5,10 @@ import path from 'path';
 import { config as serverConfig } from '../config/config.js';
 import { usenetConfig } from '../config/usenetConfig.js';
 import { logger } from '../utils/logger.js';
+import {
+  isAllowedExtension,
+  normalizeExtensions,
+} from './usenet/extensionFilter.js';
 import { applyReleaseNaming, detectNewznabCategory } from './usenet/releaseNamer.js';
 import { enqueueJob, findJobsByMediaPath, getJob, subscribe } from './usenetService.js';
 
@@ -46,6 +50,13 @@ export async function dropForUpload(
 ): Promise<string> {
   if (!usenetConfig.enabled) {
     throw new Error('Usenet feature is disabled (USENET_ENABLED=false)');
+  }
+
+  const allowed = normalizeExtensions(usenetConfig.allowedExtensions);
+  if (!isAllowedExtension(sourcePath, allowed)) {
+    throw new Error(
+      `File extension not in allowlist (${allowed.join(', ') || 'empty'}): ${path.basename(sourcePath)}`,
+    );
   }
 
   // Detect category before rename so dated daily shows still resolve to TV
@@ -100,6 +111,19 @@ async function handleAdd(linkPath: string): Promise<void> {
   if (inflight.has(linkPath) || enqueued.has(linkPath)) return;
   if (!(await statTargetExists(linkPath))) {
     logger.warn('Upload entry has no resolvable target, ignoring', { linkPath });
+    return;
+  }
+
+  const allowed = normalizeExtensions(usenetConfig.allowedExtensions);
+  if (!isAllowedExtension(linkPath, allowed)) {
+    logger.info('Upload watcher skipping non-allowed extension', { linkPath, allowed });
+    enqueued.add(linkPath);
+    fsp.unlink(linkPath).catch((err) => {
+      logger.debug('Failed to unlink filtered upload entry', {
+        linkPath,
+        error: (err as Error).message,
+      });
+    });
     return;
   }
 

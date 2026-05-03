@@ -13,6 +13,7 @@ export interface UsenetConfig {
   rarSizeMb: number;
   maxConcurrent: number;
   minFreeDiskMultiplier: number;
+  allowedExtensions: string[];
   subjectTemplate: string;
   posterFrom: string;
   nfoPath: string;
@@ -45,6 +46,7 @@ export const usenetConfig: UsenetConfig = {
   rarSizeMb: fromEnv('rarSizeMb') as number,
   maxConcurrent: fromEnv('maxConcurrent') as number,
   minFreeDiskMultiplier: fromEnv('minFreeDiskMultiplier') as number,
+  allowedExtensions: fromEnv('allowedExtensions') as string[],
   subjectTemplate: fromEnv('subjectTemplate') as string,
   posterFrom: fromEnv('posterFrom') as string,
   nfoPath: fromEnv('nfoPath') as string,
@@ -96,6 +98,7 @@ export interface UsenetConfigPublic {
   rarSizeMb: number;
   maxConcurrent: number;
   minFreeDiskMultiplier: number;
+  allowedExtensions: string[];
   subjectTemplate: string;
   posterFrom: string;
   nfoPath: string;
@@ -120,6 +123,7 @@ export function getPublicConfig(): UsenetConfigPublic {
     rarSizeMb: usenetConfig.rarSizeMb,
     maxConcurrent: usenetConfig.maxConcurrent,
     minFreeDiskMultiplier: usenetConfig.minFreeDiskMultiplier,
+    allowedExtensions: usenetConfig.allowedExtensions,
     subjectTemplate: usenetConfig.subjectTemplate,
     posterFrom: usenetConfig.posterFrom,
     nfoPath: usenetConfig.nfoPath,

@@ -57,6 +57,8 @@ export const REGISTRY = defineRegistry({
   rarSizeMb:             { key: 'rarSizeMb',             envVar: 'USENET_RAR_SIZE_MB',              group: 'archive',    kind: 'integer', default: 50                                     },
   maxConcurrent:         { key: 'maxConcurrent',         envVar: 'USENET_MAX_CONCURRENT',           group: 'archive',    kind: 'integer', default: 2                                      },
   minFreeDiskMultiplier: { key: 'minFreeDiskMultiplier', envVar: 'USENET_MIN_FREE_DISK_MULTIPLIER', group: 'archive',    kind: 'float',   default: 3                                      },
+  allowedExtensions:     { key: 'allowedExtensions',     envVar: 'USENET_ALLOWED_EXTENSIONS',       group: 'archive',    kind: 'list',    default: ['.mkv', '.mp4'],
+    description: 'File extensions eligible for upload. Empty list disables filtering. Case-insensitive; leading dot optional.' },
 
   // Usenet — subject & nyuu
   subjectTemplate:       { key: 'subjectTemplate',       envVar: 'USENET_SUBJECT_TEMPLATE',         group: 'subject',    kind: 'string',  default: '[{filename}] - "{rarname}" yEnc ({part}/{total})' },
