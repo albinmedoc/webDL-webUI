@@ -53,6 +53,9 @@ COPY src/backend ./src/backend
 COPY hooks ./hooks
 RUN chmod +x ./hooks/indexers/*.sh
 
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # /data is intended to be a volume — DB, downloads, work area, NZB output all live here.
 RUN mkdir -p /data /data/downloads /data/work /data/nzb
 
