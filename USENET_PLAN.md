@@ -11,7 +11,7 @@ Tracking progress for the feature defined in `TODO.md`.
 - **Indexer hook contract**: User sets `INDEXER_HOOK_SCRIPT=/path/to/script.sh`. Invoked once per finished NZB, with env vars: `INDEXER_NZB_PATH`, `INDEXER_TITLE`, `INDEXER_CATEGORY` (Newznab id), `INDEXER_PASSWORD`, `INDEXER_GROUP`, `INDEXER_MEDIA_PATH`. Exit 0 = success; non-zero = failure (stderr captured to job log). Per-indexer config (API URL/key) lives in its own env vars so multiple bundled hooks can coexist. Bundled scripts live in `hooks/indexers/` and ship inside the image at `/app/hooks/indexers/`.
 - **Archiver**: RAR only. `which rar` at startup; cache result. If rar is missing at upload time, fail loudly with a clear error rather than producing a non-standard archive. (7z fallback considered and dropped — extra code path, unnecessary given user's setup.)
 - **RAR settings**: `rar a -m0 -v50m` (store, no compression, 50 MB volumes). Run par2 on the rar files, not the original.
-- **Docker RAR**: `ARG INSTALL_RAR=false` build arg. Default off (legal). User can also bind-mount host binary via `/usr/bin/rar:/usr/local/bin/rar:ro`. With default build, uploads fail until rar is provided one way or the other — surfaced via the Settings panel "Test" button and at upload time.
+- **Docker RAR**: not bundled in the prod image (legal). User bind-mounts a host binary via `/usr/bin/rar:/usr/local/bin/rar:ro`. Uploads fail until rar is provided — surfaced via the Settings panel "Test" button and at upload time.
 - **Pause**: skipped — Nyuu doesn't support resume mid-post. Cancel only, with explicit cleanup + partial-post warning.
 - **Tests**: no unit tests (project has none). Document manual integration test in README.
 
@@ -121,10 +121,10 @@ Split into 5 sub-batches, each a commit point.
 ### Phase 8 — Docker, docs, examples ✅
 - [x] **Verified npm package names**: `nyuu` and `@animetosho/parpar` (already cached in `tools.ts` warning text — confirmed unchanged)
 - [x] Dockerfile: `npm install -g nyuu @animetosho/parpar`
-- [x] Dockerfile: `ARG INSTALL_RAR=false` block — when true, downloads rar from rarlab.com (amd64 + arm64) and installs to `/usr/local/bin/rar`
+- [x] Dockerfile: prod image does not bundle rar — users bind-mount a host binary at `/usr/local/bin/rar`
 - [x] Dockerfile: creates `/data`, `/data/work`, `/data/nzb`; defaults `DB_PATH` / `USENET_WORK_DIR` / `NZB_OUTPUT_DIR` to those paths
 - [x] Migrated Dockerfile from npm to pnpm to match the rest of the project
-- [x] `docker-compose.yml`: `/data` volume, `INSTALL_RAR` build arg, commented env var block covering every USENET_*/INDEXER_* knob
+- [x] `docker-compose.yml`: `/data` volume, optional rar bind-mount, commented env var block covering every USENET_*/INDEXER_* knob
 - [x] README — full Usenet section with pipeline diagram, env var reference table, indexer hook contract, RAR licensing disclaimer, manual integration test walkthrough, operational caveats (cancel-during-posting orphans articles on Eweka, no resume mid-post, posting-plans note, nzbDAV `-m0` requirement), and the new REST endpoints in the API table
 - [x] `hooks/indexers/drunkenslug.sh` — reference hook against drunkenslug's API; demonstrates the env-var contract. Folder structure is the convention for future indexers (each gets its own `<NAME>_API_KEY`/`<NAME>_API_URL`).
 

@@ -53,9 +53,6 @@ COPY src/backend ./src/backend
 COPY hooks ./hooks
 RUN chmod +x ./hooks/indexers/*.sh
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-
 # /data is intended to be a volume — DB, downloads, work area, NZB output all live here.
 RUN mkdir -p /data /data/downloads /data/work /data/nzb
 
@@ -65,8 +62,6 @@ ENV DB_PATH=/data/svtplay-dl-webui.db \
     NZB_OUTPUT_DIR=/data/nzb \
     PORT=3001 \
     NODE_ENV=production \
-    INSTALL_RAR=false \
-    RAR_VERSION=720 \
     APP_VERSION=${VERSION}
 
 EXPOSE 3001
@@ -82,5 +77,4 @@ LABEL org.opencontainers.image.created="${BUILDTIME}"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${REVISION}"
 
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["tsx", "src/backend/server.ts"]

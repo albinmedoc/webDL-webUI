@@ -30,7 +30,7 @@ function ensureRarAvailable(): void {
   }
   if (!tools.rar) {
     throw new Error(
-      'rar binary not found on PATH. Install rar (RARLAB) or mount it via volume; see docs for INSTALL_RAR build arg.'
+      'rar binary not found on PATH. Install rar (RARLAB) or bind-mount it into the container at /usr/local/bin/rar.'
     );
   }
 }

@@ -11,8 +11,9 @@ services:
       # Single mount — everything the app writes lives under /data.
       - ./data:/data
 
-      # Optional: bind-mount a host rar binary instead of letting the
-      # entrypoint download it (see INSTALL_RAR below).
+      # Required for Usenet uploads: bind-mount a host rar binary. The
+      # image does not bundle rar — provide one yourself, subject to the
+      # RARLAB license at https://www.rarlab.com/license.htm.
       # - /usr/local/bin/rar:/usr/local/bin/rar:ro
 
       # Optional: mount a custom indexer hook script. The bundled ones live at
@@ -21,13 +22,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-
-      # ───────────────────── RAR (runtime install) ─────────────────────
-      # Set to true to have the entrypoint download rar from RARLAB on
-      # start (x86_64 only, subject to https://www.rarlab.com/license.htm).
-      # Skipped automatically if /usr/local/bin/rar already exists.
-      # - INSTALL_RAR=true
-      # - RAR_VERSION=720
 
       # ───────────────── Usenet pipeline (opt-in) ─────────────────
       # Uncomment and fill these to enable Usenet auto-posting. The whole

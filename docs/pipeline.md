@@ -327,8 +327,8 @@ changes (NNTP credentials etc. take effect on the next job).
 
 ## 8. Troubleshooting checklist
 
-- **Stuck at `archiving`.** Is `rar` on the PATH? The Docker image needs
-  `--build-arg INSTALL_RAR=true` or a bind-mounted host binary.
+- **Stuck at `archiving`.** Is `rar` on the PATH? The Docker image does
+  not bundle rar — bind-mount a host binary at `/usr/local/bin/rar:ro`.
 - **Stuck at `posting` with `441` from server.** Your news account is
   read-only / no posting plan. (Eweka in particular requires an explicit
   posting-enabled tier.)

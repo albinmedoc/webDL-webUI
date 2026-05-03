@@ -12,8 +12,6 @@ A modern web interface for [svtplay-dl](https://github.com/spaam/svtplay-dl), bu
 - 📱 **Responsive design** that works on desktop and mobile
 - ⚡ **Real-time download queue** with progress tracking
 - 💾 **Persistent downloads** - survive page refreshes and browser sessions
-- 🔄 **Smart sync** - reconnects and updates status when returning to the page
-- 🎛️ **Complete options coverage** - all svtplay-dl command-line options available
 - 🔄 **Batch downloads** with queue management
 - 📊 **Download statistics** and history
 - 🧹 **Auto-cleanup** - removes old completed jobs automatically
@@ -136,10 +134,9 @@ and the failure was in `indexing`) or redo the whole upload.
 ### Enabling
 
 1. Set `USENET_ENABLED=true` plus the connection vars (see the table below).
-2. Make sure `rar` is available — either build the image with
-   `--build-arg INSTALL_RAR=true` or bind-mount a host binary at
-   `/usr/local/bin/rar:ro`. `nyuu` and `@animetosho/parpar` are already
-   bundled.
+2. Make sure `rar` is available — bind-mount a host binary at
+   `/usr/local/bin/rar:ro` (the image does not bundle it). `nyuu` and
+   `@animetosho/parpar` are already bundled.
 3. Optionally point `INDEXER_HOOK_SCRIPT` at a hook in
    [`hooks/indexers/`](hooks/indexers/) (e.g.
    `/app/hooks/indexers/drunkenslug.sh`, which uses the public bulk
@@ -218,21 +215,6 @@ filename has season/episode or a daily-show date, otherwise `2010`
 filter Swedish content. nzbDAV setups can ignore the value entirely; it
 only matters when posting to a Newznab indexer.
 
-### RAR licensing
-
-`rar` is non-free software (license: <https://www.rarlab.com/license.htm>).
-The Docker image **does not bundle it by default**. If you accept the
-WinRAR license, build with `--build-arg INSTALL_RAR=true`; otherwise
-bind-mount your host binary, e.g.:
-
-```yaml
-volumes:
-  - /usr/local/bin/rar:/usr/local/bin/rar:ro
-```
-
-Without `rar`, Usenet uploads will fail at the archiving step with a clear
-error. ParPar and Nyuu are bundled (both are MIT-licensed npm packages).
-
 ### Operational caveats
 
 - **Cancelling during `posting` orphans articles** on the news server: Nyuu
@@ -260,18 +242,6 @@ error. ParPar and Nyuu are bundled (both are MIT-licensed npm packages).
    queued → archiving → par2 → posting → posted → indexing → done.
 5. Visit `/usenet`. The job is listed with a "Show password" reveal and a
    "Download NZB" button.
-
-## Screenshots
-
-### Main Interface
-![Application Interface](screenshots/application-interface.png)
-
-The interface features:
-- **Clean, modern design** with intuitive controls
-- **Real-time download queue** showing progress and status
-- **Advanced options panel** with all svtplay-dl features
-- **Persistent download indicators** showing restored sessions
-- **Download management tools** for cleanup and history
 
 ## API Endpoints
 
@@ -326,12 +296,6 @@ config display, the History view, and one-shot operations.
 - `/data`: Single persistent volume holding downloads (`/data/downloads`),
   the SQLite DB, the RAR/PAR2 work area, and generated NZBs.
 
-### Build args
-
-- `INSTALL_RAR` (default `false`): when `true`, the runtime image downloads
-  rar from rarlab and installs it at `/usr/local/bin/rar`. See the [RAR
-  licensing](#rar-licensing) section.
-
 ### Example Docker Run
 
 ```bash
@@ -350,90 +314,27 @@ This project automatically builds and publishes Docker images to the GitHub Cont
 
 ```bash
 # Latest stable release
-docker pull ghcr.io/[username]/svtplay-dl-webui:latest
+docker pull ghcr.io/albinmedoc/webdl-webui:latest
 
 # Specific version
-docker pull ghcr.io/[username]/svtplay-dl-webui:v1.2.3
-
-# Development version
-docker pull ghcr.io/[username]/svtplay-dl-webui:dev
-
-# Multi-architecture support (linux/amd64, linux/arm64)
+docker pull ghcr.io/albinmedoc/webdl-webui:v1.2.3
 ```
-
-#### Automated Tagging Strategy
-
-- **`latest`** - Latest stable release from main branch
-- **`v1.2.3`** - Exact version tags (automatically created)
-- **`v1.2`** - Major.minor version tags
-- **`v1`** - Major version tags  
-- **`dev`** - Latest development build from develop branch
-- **`main-YYYYMMDD`** - Daily builds from main branch
-- **`sha-abc1234`** - Git commit SHA tags
-- **`pr-123`** - Pull request builds
-
-#### Workflow Status
-
-[![Docker Release](../../actions/workflows/docker-release.yml/badge.svg)](../../actions/workflows/docker-release.yml)
-[![Auto Versioning](../../actions/workflows/auto-version.yml/badge.svg)](../../actions/workflows/auto-version.yml)
-[![Development Build](../../actions/workflows/dev-build.yml/badge.svg)](../../actions/workflows/dev-build.yml)
 
 #### Usage with GitHub Container Registry
 
 ```bash
 # Pull and run latest release
-docker pull ghcr.io/[username]/svtplay-dl-webui:latest
+docker pull ghcr.io/albinmedoc/webdl-webui:latest
 docker run -d \
   --name svtplay-dl-webui \
   -p 3001:3001 \
   -v $(pwd)/data:/data \
-  ghcr.io/[username]/svtplay-dl-webui:latest
+  ghcr.io/albinmedoc/webdl-webui:latest
 
 # Or use docker-compose with ghcr.io image
 ```
 
 For detailed information about the Docker automation, see [.github/DOCKER.md](.github/DOCKER.md).
-
-## Development
-
-### Project Structure
-
-```
-src/
-├── components/
-│   ├── DownloadForm.vue      # Main download form
-│   └── DownloadQueue.vue     # Download queue display
-├── stores/
-│   └── downloadStore.ts      # Pinia store for state management
-├── App.vue                   # Main application component
-└── main.ts                   # Application entry point
-```
-
-### Tech Stack
-
-- **Frontend:** Vue 3 + TypeScript + Vite
-- **State Management:** Pinia
-- **Styling:** Tailwind CSS
-- **Backend:** Node.js + Express
-- **HTTP Client:** Native Fetch API
-- **Containerization:** Docker + Docker Compose
-
-### Build Commands
-
-```bash
-# Development
-npm run dev              # Start frontend dev server
-npm run dev:server       # Start backend server
-npm run dev:full         # Build and start full stack
-
-# Production
-npm run build            # Build frontend
-npm start                # Build and start production server
-
-# Docker
-docker-compose up        # Start with Docker
-docker-compose up -d     # Start in background
-```
 
 ## Supported Services
 
@@ -453,15 +354,6 @@ This web interface supports all services that svtplay-dl supports, including:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## Development Credits
-
-This entire repository was created by **GitHub Copilot Agent** - an AI-powered development assistant that generated all the code, configuration files, documentation, and features from scratch. The project demonstrates the capabilities of AI-assisted software development in creating a complete, functional web application.
-
 ## License
 
 This project is open source and available under the MIT License.
-
-## Acknowledgments
-
-- [svtplay-dl](https://github.com/spaam/svtplay-dl) - The excellent command-line tool this interface is built for
-- [Vue.js](https://vuejs.org/) - The progressive JavaScript framework

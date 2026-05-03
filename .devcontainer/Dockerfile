@@ -1,6 +1,5 @@
 FROM mcr.microsoft.com/devcontainers/javascript-node:20
 
-ARG INSTALL_RAR=true
 ARG RAR_VERSION=720
 
 USER root
@@ -19,23 +18,18 @@ RUN pip3 install --no-cache-dir --break-system-packages svtplay-dl
 
 # RAR is only published as x86_64 by RARLAB. On arm64 hosts (Apple silicon
 # native) the install is skipped — uploads will fail with a clear error
-# until the user provides rar manually (bind-mount, or build the prod image
-# with --platform=linux/amd64). pnpm dev/test still works without rar.
-RUN if [ "$INSTALL_RAR" = "true" ]; then \
-        set -eux; \
-        arch="$(uname -m)"; \
-        if [ "$arch" = "x86_64" ]; then \
-            echo "Installing RAR version $RAR_VERSION for architecture $arch"; \
-            curl -fsSL "https://www.rarlab.com/rar/rarlinux-x64-${RAR_VERSION}.tar.gz" -o /tmp/rar.tar.gz; \
-            tar -xzf /tmp/rar.tar.gz -C /tmp; \
-            install -m 755 /tmp/rar/rar /usr/local/bin/rar; \
-            install -m 755 /tmp/rar/unrar /usr/local/bin/unrar; \
-            rm -rf /tmp/rar /tmp/rar.tar.gz; \
-        else \
-            echo "Skipping RAR install on $arch — RARLAB ships x86_64 only"; \
-        fi; \
+# until the user provides rar manually. pnpm dev/test still works without it.
+RUN set -eux; \
+    arch="$(uname -m)"; \
+    if [ "$arch" = "x86_64" ]; then \
+        echo "Installing RAR version $RAR_VERSION for architecture $arch"; \
+        curl -fsSL "https://www.rarlab.com/rar/rarlinux-x64-${RAR_VERSION}.tar.gz" -o /tmp/rar.tar.gz; \
+        tar -xzf /tmp/rar.tar.gz -C /tmp; \
+        install -m 755 /tmp/rar/rar /usr/local/bin/rar; \
+        install -m 755 /tmp/rar/unrar /usr/local/bin/unrar; \
+        rm -rf /tmp/rar /tmp/rar.tar.gz; \
     else \
-        echo "Skipping RAR install — INSTALL_RAR is set to false"; \
+        echo "Skipping RAR install on $arch — RARLAB ships x86_64 only"; \
     fi
 
 RUN npm install -g pnpm@9 nyuu @animetosho/parpar
