@@ -9,6 +9,11 @@ import { USENET_JOB_STATES, type UsenetJobState } from '../db/schema.js';
 import { isRegistryKey } from '../config/registry.js';
 import { getJob as getDownloadJob } from '../services/downloadJobsService.js';
 import {
+  downloadLogPath,
+  logFileExists,
+  usenetLogPath,
+} from '../services/jobLogService.js';
+import {
   clearOverride,
   listSettings,
   updateSettings,
@@ -221,6 +226,48 @@ export function setupRoutes(app: Application, rootDir: string): void {
       return;
     }
     res.download(resolved, path.basename(resolved));
+  });
+
+  app.get('/api/downloads/jobs/:id/logs', async (req: Request, res: Response) => {
+    const job = getDownloadJob(req.params.id);
+    if (!job) {
+      res.status(404).json({ error: 'job not found' });
+      return;
+    }
+    const logPath = downloadLogPath(job.id);
+    if (!(await logFileExists(logPath))) {
+      res.status(404).json({ error: 'no log on disk for this job' });
+      return;
+    }
+    if (req.query.download === '1') {
+      res.download(logPath, `${job.id}.log`);
+      return;
+    }
+    res.type('text/plain; charset=utf-8');
+    fs.createReadStream(logPath).pipe(res);
+  });
+
+  app.get('/api/usenet/jobs/:id/logs', async (req: Request, res: Response) => {
+    if (!usenetConfig.enabled) {
+      res.status(404).json({ error: 'Usenet feature is disabled' });
+      return;
+    }
+    const job = getJob(req.params.id);
+    if (!job) {
+      res.status(404).json({ error: 'job not found' });
+      return;
+    }
+    const logPath = usenetLogPath(job.id);
+    if (!(await logFileExists(logPath))) {
+      res.status(404).json({ error: 'no log on disk for this job' });
+      return;
+    }
+    if (req.query.download === '1') {
+      res.download(logPath, `${job.id}.log`);
+      return;
+    }
+    res.type('text/plain; charset=utf-8');
+    fs.createReadStream(logPath).pipe(res);
   });
 
   app.get('/api/usenet/jobs/:id/nzb', (req: Request, res: Response) => {

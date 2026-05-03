@@ -33,20 +33,54 @@
           style="height: 70vh; overflow-y: auto; overflow-x: auto; white-space: pre;"
         >
           <div v-if="!job" class="text-muted">Job not found.</div>
-          <div v-else-if="job.logs.length === 0" class="text-muted">No logs yet…</div>
+          <div v-else-if="fullLogError" class="text-warning">{{ fullLogError }}</div>
+          <div v-else-if="visibleLogs.length === 0" class="text-muted">No logs yet…</div>
           <div v-else>
-            <div v-for="(line, idx) in job.logs" :key="idx">{{ line }}</div>
+            <div v-for="(line, idx) in visibleLogs" :key="idx">{{ line }}</div>
           </div>
         </div>
 
-        <div class="card-footer d-flex justify-content-between align-items-center gap-2 small text-muted">
+        <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2 small text-muted">
           <span>
             <i class="bi bi-info-circle me-1"></i>
-            Showing the last {{ job?.logs.length ?? 0 }} log line(s); updates live.
+            <template v-if="fullLogLoaded">
+              Showing full log ({{ visibleLogs.length }} line(s)); live tail paused.
+            </template>
+            <template v-else>
+              Showing the last {{ job?.logs.length ?? 0 }} log line(s); updates live.
+            </template>
           </span>
-          <button class="btn btn-sm btn-outline-secondary" @click="$emit('close')">
-            Close
-          </button>
+          <div class="d-flex gap-2 align-items-center">
+            <button
+              v-if="!fullLogLoaded"
+              class="btn btn-sm btn-outline-light"
+              :disabled="fullLogLoading || !job"
+              @click="loadFullLog"
+            >
+              <i class="bi bi-file-earmark-text me-1"></i>
+              {{ fullLogLoading ? 'Loading…' : 'Load full log' }}
+            </button>
+            <button
+              v-else
+              class="btn btn-sm btn-outline-light"
+              @click="resumeLiveTail"
+            >
+              <i class="bi bi-arrow-down-circle me-1"></i>
+              Resume live tail
+            </button>
+            <a
+              v-if="job"
+              class="btn btn-sm btn-outline-light"
+              :href="`/api/downloads/jobs/${job.id}/logs?download=1`"
+              :download="`${job.id}.log`"
+              title="Download .log file"
+            >
+              <i class="bi bi-download"></i>
+            </a>
+            <button class="btn btn-sm btn-outline-secondary" @click="$emit('close')">
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -63,6 +97,40 @@ defineEmits<{ close: [] }>()
 const downloadStore = useDownloadStore()
 const job = computed(() => downloadStore.jobs.find((j) => j.id === props.jobId))
 const logContainer = ref<HTMLDivElement | null>(null)
+
+const fullLogLines = ref<string[] | null>(null)
+const fullLogLoading = ref(false)
+const fullLogError = ref<string | null>(null)
+const fullLogLoaded = computed(() => fullLogLines.value !== null)
+const visibleLogs = computed<string[]>(() =>
+  fullLogLines.value ?? job.value?.logs ?? [],
+)
+
+async function loadFullLog(): Promise<void> {
+  if (!job.value) return
+  fullLogLoading.value = true
+  fullLogError.value = null
+  try {
+    const res = await fetch(`/api/downloads/jobs/${job.value.id}/logs`)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `HTTP ${res.status}`)
+    }
+    const text = await res.text()
+    fullLogLines.value = text.length === 0 ? [] : text.replace(/\n$/, '').split('\n')
+    scrollToBottom()
+  } catch (err) {
+    fullLogError.value = `Failed to load full log: ${(err as Error).message}`
+  } finally {
+    fullLogLoading.value = false
+  }
+}
+
+function resumeLiveTail(): void {
+  fullLogLines.value = null
+  fullLogError.value = null
+  scrollToBottom()
+}
 
 const isAtBottom = ref(true)
 
@@ -83,6 +151,7 @@ function scrollToBottom(): void {
 watch(
   () => job.value?.logs.length ?? 0,
   () => {
+    if (fullLogLoaded.value) return
     if (isAtBottom.value) scrollToBottom()
   },
 )

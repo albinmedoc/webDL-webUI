@@ -36,20 +36,53 @@
           style="height: 70vh; overflow-y: auto; overflow-x: auto; white-space: pre;"
         >
           <div v-if="!logs" class="text-muted">Job not found.</div>
-          <div v-else-if="logs.length === 0" class="text-muted">No logs yet…</div>
+          <div v-else-if="fullLogError" class="text-warning">{{ fullLogError }}</div>
+          <div v-else-if="visibleLogs.length === 0" class="text-muted">No logs yet…</div>
           <div v-else>
-            <div v-for="(line, idx) in logs" :key="idx">{{ line }}</div>
+            <div v-for="(line, idx) in visibleLogs" :key="idx">{{ line }}</div>
           </div>
         </div>
 
-        <div class="card-footer d-flex justify-content-between align-items-center gap-2 small text-muted">
+        <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2 small text-muted">
           <span>
             <i class="bi bi-info-circle me-1"></i>
-            Showing the last {{ logs?.length ?? 0 }} log line(s); updates live.
+            <template v-if="fullLogLoaded">
+              Showing full log ({{ visibleLogs.length }} line(s)); live tail paused.
+            </template>
+            <template v-else>
+              Showing the last {{ logs?.length ?? 0 }} log line(s); updates live.
+            </template>
           </span>
-          <button class="btn btn-sm btn-outline-secondary" @click="$emit('close')">
-            Close
-          </button>
+          <div class="d-flex gap-2 align-items-center">
+            <button
+              v-if="!fullLogLoaded"
+              class="btn btn-sm btn-outline-light"
+              :disabled="fullLogLoading"
+              @click="loadFullLog"
+            >
+              <i class="bi bi-file-earmark-text me-1"></i>
+              {{ fullLogLoading ? 'Loading…' : 'Load full log' }}
+            </button>
+            <button
+              v-else
+              class="btn btn-sm btn-outline-light"
+              @click="resumeLiveTail"
+            >
+              <i class="bi bi-arrow-down-circle me-1"></i>
+              Resume live tail
+            </button>
+            <a
+              class="btn btn-sm btn-outline-light"
+              :href="`/api/usenet/jobs/${jobId}/logs?download=1`"
+              :download="`${jobId}.log`"
+              title="Download .log file"
+            >
+              <i class="bi bi-download"></i>
+            </a>
+            <button class="btn btn-sm btn-outline-secondary" @click="$emit('close')">
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -87,6 +120,37 @@ const logs = computed<string[] | null>(() => {
 })
 const logContainer = ref<HTMLDivElement | null>(null)
 
+const fullLogLines = ref<string[] | null>(null)
+const fullLogLoading = ref(false)
+const fullLogError = ref<string | null>(null)
+const fullLogLoaded = computed(() => fullLogLines.value !== null)
+const visibleLogs = computed<string[]>(() => fullLogLines.value ?? logs.value ?? [])
+
+async function loadFullLog(): Promise<void> {
+  fullLogLoading.value = true
+  fullLogError.value = null
+  try {
+    const res = await fetch(`/api/usenet/jobs/${props.jobId}/logs`)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `HTTP ${res.status}`)
+    }
+    const text = await res.text()
+    fullLogLines.value = text.length === 0 ? [] : text.replace(/\n$/, '').split('\n')
+    scrollToBottom()
+  } catch (err) {
+    fullLogError.value = `Failed to load full log: ${(err as Error).message}`
+  } finally {
+    fullLogLoading.value = false
+  }
+}
+
+function resumeLiveTail(): void {
+  fullLogLines.value = null
+  fullLogError.value = null
+  scrollToBottom()
+}
+
 const isAtBottom = ref(true)
 
 function recordScrollPosition(): void {
@@ -106,6 +170,7 @@ function scrollToBottom(): void {
 watch(
   () => logs.value?.length ?? 0,
   () => {
+    if (fullLogLoaded.value) return
     if (isAtBottom.value) scrollToBottom()
   },
 )
