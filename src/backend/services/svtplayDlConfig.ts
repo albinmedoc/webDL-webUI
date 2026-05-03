@@ -2,6 +2,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { stringify as stringifyYaml } from 'yaml';
+
 import { config as serverConfig } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 
@@ -16,21 +18,17 @@ function configPath(): string {
   return path.join(os.homedir(), '.config', 'svtplay-dl', 'svtplay-dl.yaml');
 }
 
-function yamlString(value: string): string {
-  // Quote everything so braces, colons, and special chars in templates and
-  // proxy URLs survive YAML parsing untouched.
-  const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  return `"${escaped}"`;
-}
-
 function buildYaml(): string {
-  const lines: string[] = [MARKER];
-  lines.push(`path: ${yamlString(serverConfig.downloadOutputDir)}`);
-  lines.push(`filename: ${yamlString(serverConfig.svtplaydlFilenameTemplate)}`);
+  // svtplay-dl expects all settings nested under a top-level `default:` map;
+  // flat top-level keys are silently ignored.
+  const settings: Record<string, string> = {
+    path: serverConfig.downloadOutputDir,
+    filename: serverConfig.svtplaydlFilenameTemplate,
+  };
   if (serverConfig.svtplaydlProxy) {
-    lines.push(`proxy: ${yamlString(serverConfig.svtplaydlProxy)}`);
+    settings.proxy = serverConfig.svtplaydlProxy;
   }
-  return lines.join('\n') + '\n';
+  return `${MARKER}\n${stringifyYaml({ default: settings })}`;
 }
 
 export function writeSvtplayDlConfig(): void {
