@@ -195,18 +195,20 @@
                   />
                 </td>
                 <td>
-                  <div
+                  <button
                     v-if="job.files.length > 0"
-                    class="text-truncate fw-semibold"
+                    type="button"
+                    class="btn btn-link p-0 text-start text-decoration-none text-truncate fw-semibold d-block"
                     style="max-width: 420px"
-                    :title="job.files.map((f) => f.path).join('\n')"
+                    :title="`${job.files.map((f) => f.path).join('\n')}\n\nClick to view all files`"
+                    @click="openFiles(job.id)"
                   >
                     <i class="bi bi-file-earmark-play me-1 text-muted"></i>
                     {{ basename(job.files[0].path) }}
                     <span v-if="job.files.length > 1" class="text-muted small ms-1">
                       +{{ job.files.length - 1 }} more
                     </span>
-                  </div>
+                  </button>
                   <a
                     class="d-inline-block text-truncate text-muted small"
                     style="max-width: 420px"
@@ -273,6 +275,14 @@
                       <i class="bi bi-terminal"></i>
                     </button>
                     <button
+                      v-if="job.files.length > 0"
+                      class="btn btn-outline-success"
+                      @click="openFiles(job.id)"
+                      :title="`View ${job.files.length} file(s)`"
+                    >
+                      <i class="bi bi-folder2-open"></i>
+                    </button>
+                    <button
                       v-if="job.status === 'downloading'"
                       class="btn btn-outline-warning"
                       @click="downloadStore.cancelDownload(job.id)"
@@ -319,6 +329,12 @@
       @close="closeLogs"
     />
 
+    <DownloadFilesModal
+      v-if="filesJobId"
+      :job-id="filesJobId"
+      @close="closeFiles"
+    />
+
     <Teleport v-if="showFormModal" to="body">
       <div class="modal-backdrop-custom" @click.self="showFormModal = false">
         <div class="modal-dialog-custom">
@@ -346,6 +362,7 @@ import {
   type DownloadStatus,
 } from '../stores/downloadStore'
 import { useUsenetStore } from '../stores/usenetStore'
+import DownloadFilesModal from '../components/DownloadFilesModal.vue'
 import DownloadForm from '../components/DownloadForm.vue'
 import DownloadLogsModal from '../components/DownloadLogsModal.vue'
 
@@ -370,6 +387,7 @@ const errorMessage = ref<string | null>(null)
 const showDropdown = ref(false)
 const showFormModal = ref(false)
 const logsJobId = ref<string | null>(null)
+const filesJobId = ref<string | null>(null)
 const postedJobIds = ref<Set<string>>(new Set())
 
 const filteredJobs = computed<DownloadJob[]>(() => {
@@ -511,6 +529,14 @@ function closeLogs(): void {
   logsJobId.value = null
 }
 
+function openFiles(id: string): void {
+  filesJobId.value = id
+}
+
+function closeFiles(): void {
+  filesJobId.value = null
+}
+
 function runStoreAction(fn: () => void): void {
   fn()
   showDropdown.value = false
@@ -598,7 +624,8 @@ function getEtaFromLogs(job: DownloadJob): string {
 
 function handleEscape(event: KeyboardEvent): void {
   if (event.key !== 'Escape') return
-  if (logsJobId.value) closeLogs()
+  if (filesJobId.value) closeFiles()
+  else if (logsJobId.value) closeLogs()
   else if (showFormModal.value) showFormModal.value = false
 }
 

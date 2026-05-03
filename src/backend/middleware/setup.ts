@@ -3,9 +3,11 @@ import express, { Application, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 
+import { config as serverConfig } from '../config/config.js';
 import { getPublicConfig, usenetConfig } from '../config/usenetConfig.js';
 import { USENET_JOB_STATES, type UsenetJobState } from '../db/schema.js';
 import { isRegistryKey } from '../config/registry.js';
+import { getJob as getDownloadJob } from '../services/downloadJobsService.js';
 import {
   clearOverride,
   listSettings,
@@ -180,6 +182,45 @@ export function setupRoutes(app: Application, rootDir: string): void {
       return;
     }
     res.status(500).json({ error: result.reason ?? 'unknown error' });
+  });
+
+  app.get('/api/downloads/jobs/:id/files/download', (req: Request, res: Response) => {
+    const job = getDownloadJob(req.params.id);
+    if (!job) {
+      res.status(404).json({ error: 'job not found' });
+      return;
+    }
+    const requested = typeof req.query.path === 'string' ? req.query.path : '';
+    if (!requested) {
+      res.status(400).json({ error: 'path query parameter required' });
+      return;
+    }
+    const allowed = job.files.find((f) => f.path === requested);
+    if (!allowed) {
+      res.status(404).json({ error: 'file not associated with this job' });
+      return;
+    }
+    const resolved = path.resolve(allowed.path);
+    const downloadRoot = path.resolve(serverConfig.downloadOutputDir);
+    const jobOutputDir = job.outputDir ? path.resolve(job.outputDir) : null;
+    const withinAllowedRoot =
+      resolved === downloadRoot ||
+      resolved.startsWith(downloadRoot + path.sep) ||
+      (jobOutputDir !== null &&
+        (resolved === jobOutputDir || resolved.startsWith(jobOutputDir + path.sep)));
+    if (!withinAllowedRoot) {
+      logger.warn('Download file path escaped allowed roots', {
+        jobId: job.id,
+        path: resolved,
+      });
+      res.status(403).json({ error: 'file outside allowed download directory' });
+      return;
+    }
+    if (!fs.existsSync(resolved)) {
+      res.status(410).json({ error: 'file no longer on disk' });
+      return;
+    }
+    res.download(resolved, path.basename(resolved));
   });
 
   app.get('/api/usenet/jobs/:id/nzb', (req: Request, res: Response) => {
