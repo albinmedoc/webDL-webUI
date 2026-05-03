@@ -33,19 +33,19 @@
               style="top: 100%; right: 0; z-index: 1000;"
             >
               <li>
-                <button class="dropdown-item" @click="runStoreAction(downloadStore.clearCompletedJobs)">
+                <button class="dropdown-item" @click="confirmClearCompleted">
                   <i class="bi bi-check-circle me-2"></i>
                   Clear completed
                 </button>
               </li>
               <li>
-                <button class="dropdown-item" @click="runStoreAction(() => downloadStore.clearOldJobs(7))">
+                <button class="dropdown-item" @click="confirmClearOld(7)">
                   <i class="bi bi-calendar-week me-2"></i>
                   Clear jobs older than 7 days
                 </button>
               </li>
               <li>
-                <button class="dropdown-item" @click="runStoreAction(() => downloadStore.clearOldJobs(1))">
+                <button class="dropdown-item" @click="confirmClearOld(1)">
                   <i class="bi bi-calendar-day me-2"></i>
                   Clear jobs older than 1 day
                 </button>
@@ -309,7 +309,7 @@
                     </button>
                     <button
                       class="btn btn-outline-danger"
-                      @click="downloadStore.removeJob(job.id)"
+                      @click="confirmRemoveOne(job)"
                       title="Remove job"
                     >
                       <i class="bi bi-x-circle"></i>
@@ -335,6 +335,18 @@
       @close="closeFiles"
     />
 
+    <DeleteConfirmModal
+      v-if="confirmState"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirm-label="confirmState.confirmLabel"
+      :checkbox-label="confirmState.checkboxLabel"
+      :checkbox-hint="confirmState.checkboxHint"
+      :default-delete-files="true"
+      @confirm="onConfirmDelete"
+      @cancel="confirmState = null"
+    />
+
     <Teleport v-if="showFormModal" to="body">
       <div class="modal-backdrop-custom" @click.self="showFormModal = false">
         <div class="modal-dialog-custom">
@@ -355,13 +367,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   useDownloadStore,
   type DownloadJob,
   type DownloadStatus,
 } from '../stores/downloadStore'
 import { useUsenetStore } from '../stores/usenetStore'
+import DeleteConfirmModal from '../components/DeleteConfirmModal.vue'
 import DownloadFilesModal from '../components/DownloadFilesModal.vue'
 import DownloadForm from '../components/DownloadForm.vue'
 import DownloadLogsModal from '../components/DownloadLogsModal.vue'
@@ -378,9 +392,29 @@ const ACTIVE_STATUSES: DownloadStatus[] = ['pending', 'downloading']
 
 const downloadStore = useDownloadStore()
 const usenetStore = useUsenetStore()
+const route = useRoute()
+const router = useRouter()
 
-const searchInput = ref('')
-const statusFilter = ref<DownloadStatus | ''>('')
+function readQueryString(name: string): string {
+  const raw = route.query[name]
+  if (Array.isArray(raw)) return typeof raw[0] === 'string' ? raw[0] : ''
+  return typeof raw === 'string' ? raw : ''
+}
+
+const initialStatusQuery = readQueryString('status')
+const searchInput = ref(readQueryString('search'))
+const statusFilter = ref<DownloadStatus | ''>(
+  (ALL_STATUSES as readonly string[]).includes(initialStatusQuery)
+    ? (initialStatusQuery as DownloadStatus)
+    : '',
+)
+
+watch([searchInput, statusFilter], () => {
+  const next: Record<string, string> = {}
+  if (searchInput.value.trim()) next.search = searchInput.value.trim()
+  if (statusFilter.value) next.status = statusFilter.value
+  router.replace({ query: next })
+})
 const selectedIds = ref<Set<string>>(new Set())
 const bulkBusy = ref(false)
 const errorMessage = ref<string | null>(null)
@@ -389,6 +423,23 @@ const showFormModal = ref(false)
 const logsJobId = ref<string | null>(null)
 const filesJobId = ref<string | null>(null)
 const postedJobIds = ref<Set<string>>(new Set())
+
+interface ConfirmState {
+  title: string
+  message: string
+  confirmLabel?: string
+  checkboxLabel?: string
+  checkboxHint?: string
+  onConfirm: (deleteFiles: boolean) => void
+}
+
+const confirmState = ref<ConfirmState | null>(null)
+
+function onConfirmDelete(payload: { deleteFiles: boolean }): void {
+  const cb = confirmState.value?.onConfirm
+  confirmState.value = null
+  cb?.(payload.deleteFiles)
+}
 
 const filteredJobs = computed<DownloadJob[]>(() => {
   const q = searchInput.value.trim().toLowerCase()
@@ -464,26 +515,31 @@ async function bulkCancel(): Promise<void> {
   }
 }
 
-async function bulkRemove(): Promise<void> {
+function bulkRemove(): void {
   if (selectedIds.value.size === 0) return
   const activeAmong = selectedJobs.value.filter((j) =>
     ACTIVE_STATUSES.includes(j.status),
   ).length
-  const lines = [
-    `Remove ${selectedIds.value.size} job(s)?`,
-  ]
+  const lines = [`Remove ${selectedIds.value.size} job(s)?`]
   if (activeAmong > 0) {
-    lines.push(`(${activeAmong} are still active and will be cancelled.)`)
+    lines.push(`${activeAmong} active download(s) will be cancelled first.`)
   }
-  if (!window.confirm(lines.join('\n'))) return
-  bulkBusy.value = true
-  try {
-    for (const job of selectedJobs.value) {
-      downloadStore.removeJob(job.id)
-    }
-    clearSelection()
-  } finally {
-    bulkBusy.value = false
+  const targets = [...selectedJobs.value]
+  confirmState.value = {
+    title: 'Remove downloads',
+    message: lines.join('\n'),
+    confirmLabel: `Remove ${targets.length}`,
+    onConfirm: (deleteFiles) => {
+      bulkBusy.value = true
+      try {
+        for (const job of targets) {
+          downloadStore.removeJob(job.id, deleteFiles)
+        }
+        clearSelection()
+      } finally {
+        bulkBusy.value = false
+      }
+    },
   }
 }
 
@@ -537,21 +593,51 @@ function closeFiles(): void {
   filesJobId.value = null
 }
 
-function runStoreAction(fn: () => void): void {
-  fn()
+function confirmRemoveOne(job: DownloadJob): void {
+  const lines = [`Remove this download?`, '', `URL: ${job.url}`]
+  if (ACTIVE_STATUSES.includes(job.status)) {
+    lines.push('', 'This job is currently active and will be cancelled first.')
+  }
+  confirmState.value = {
+    title: 'Remove download',
+    message: lines.join('\n'),
+    confirmLabel: 'Remove',
+    onConfirm: (deleteFiles) => downloadStore.removeJob(job.id, deleteFiles),
+  }
+}
+
+function confirmClearCompleted(): void {
   showDropdown.value = false
+  confirmState.value = {
+    title: 'Clear completed',
+    message: 'Remove all completed download jobs?',
+    confirmLabel: 'Clear',
+    onConfirm: (deleteFiles) => downloadStore.clearCompletedJobs(deleteFiles),
+  }
+}
+
+function confirmClearOld(daysOld: number): void {
+  showDropdown.value = false
+  confirmState.value = {
+    title: `Clear jobs older than ${daysOld} day${daysOld === 1 ? '' : 's'}`,
+    message: `Remove all non-active jobs older than ${daysOld} day${daysOld === 1 ? '' : 's'}?`,
+    confirmLabel: 'Clear',
+    onConfirm: (deleteFiles) => downloadStore.clearOldJobs(daysOld, deleteFiles),
+  }
 }
 
 function confirmClearAll(): void {
-  if (
-    window.confirm(
-      'Clear all download history? Active downloads will be cancelled. This action cannot be undone.',
-    )
-  ) {
-    downloadStore.clearAllData()
-    clearSelection()
-  }
   showDropdown.value = false
+  confirmState.value = {
+    title: 'Clear all download history',
+    message:
+      'Remove every download job? Active downloads will be cancelled. This action cannot be undone.',
+    confirmLabel: 'Clear all',
+    onConfirm: (deleteFiles) => {
+      downloadStore.clearAllData(deleteFiles)
+      clearSelection()
+    },
+  }
 }
 
 function basename(p: string | null): string {
@@ -624,7 +710,8 @@ function getEtaFromLogs(job: DownloadJob): string {
 
 function handleEscape(event: KeyboardEvent): void {
   if (event.key !== 'Escape') return
-  if (filesJobId.value) closeFiles()
+  if (confirmState.value) confirmState.value = null
+  else if (filesJobId.value) closeFiles()
   else if (logsJobId.value) closeLogs()
   else if (showFormModal.value) showFormModal.value = false
 }

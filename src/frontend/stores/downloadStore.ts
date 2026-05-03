@@ -291,24 +291,24 @@ export const useDownloadStore = defineStore('download', () => {
     return args
   }
 
-  const removeJob = (jobId: string) => {
+  const removeJob = (jobId: string, deleteFiles = false) => {
     if (!socket.value?.connected) return
-    socket.value.emit('remove-download-job', { downloadId: jobId })
+    socket.value.emit('remove-download-job', { downloadId: jobId, deleteFiles })
   }
 
-  const clearCompletedJobs = () => {
+  const clearCompletedJobs = (deleteFiles = false) => {
     if (!socket.value?.connected) return
-    socket.value.emit('clear-completed-downloads')
+    socket.value.emit('clear-completed-downloads', { deleteFiles })
   }
 
-  const clearOldJobs = (daysOld: number = 7) => {
+  const clearOldJobs = (daysOld: number = 7, deleteFiles = false) => {
     if (!socket.value?.connected) return
-    socket.value.emit('clear-old-downloads', { daysOld })
+    socket.value.emit('clear-old-downloads', { daysOld, deleteFiles })
   }
 
-  const clearAllData = () => {
+  const clearAllData = (deleteFiles = false) => {
     if (!socket.value?.connected) return
-    socket.value.emit('clear-all-downloads')
+    socket.value.emit('clear-all-downloads', { deleteFiles })
   }
 
   const updateOptions = (newOptions: Partial<DownloadOptions>) => {

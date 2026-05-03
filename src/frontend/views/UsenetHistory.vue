@@ -74,7 +74,7 @@
             class="btn btn-outline-danger btn-sm"
             :disabled="bulkBusy || selectedDeletableCount === 0"
             @click="bulkDelete"
-            :title="`Delete ${selectedDeletableCount} terminal job(s)`"
+            :title="`Delete ${selectedDeletableCount} job(s) (active ones will be cancelled first)`"
           >
             <i class="bi bi-trash me-1"></i>
             Delete ({{ selectedDeletableCount }})
@@ -198,11 +198,10 @@
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
                     <button
-                      v-if="isTerminal(job.state)"
                       class="btn btn-outline-danger"
                       :disabled="deletingId === job.id"
                       @click="confirmDelete(job)"
-                      title="Delete job"
+                      :title="isTerminal(job.state) ? 'Delete job' : 'Cancel and delete job'"
                     >
                       <i class="bi" :class="deletingId === job.id ? 'bi-arrow-clockwise' : 'bi-trash'"></i>
                     </button>
@@ -257,6 +256,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import UsenetLogsModal from '../components/UsenetLogsModal.vue'
 import { useUsenetStore, type UsenetJobSummary, type UsenetState } from '../stores/usenetStore'
 
@@ -275,16 +275,39 @@ const ALL_STATES: UsenetState[] = [
 const TERMINAL: UsenetState[] = ['done', 'failed', 'cancelled']
 
 const usenetStore = useUsenetStore()
+const route = useRoute()
+const router = useRouter()
+
+const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const
+const ALL_STATE_SET = new Set<string>(ALL_STATES)
+
+function readQueryString(name: string): string {
+  const raw = route.query[name]
+  if (Array.isArray(raw)) return typeof raw[0] === 'string' ? raw[0] : ''
+  return typeof raw === 'string' ? raw : ''
+}
+
+function readQueryInt(name: string, fallback: number, allowed?: readonly number[]): number {
+  const raw = readQueryString(name)
+  if (!raw) return fallback
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isFinite(n)) return fallback
+  if (allowed && !allowed.includes(n)) return fallback
+  return n > 0 ? n : fallback
+}
 
 const jobs = ref<UsenetJobSummary[]>([])
 const total = ref(0)
-const page = ref(1)
-const pageSize = ref(25)
+const page = ref(readQueryInt('page', 1))
+const pageSize = ref(readQueryInt('pageSize', 25, ALLOWED_PAGE_SIZES))
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
 
-const searchInput = ref('')
-const stateFilter = ref<UsenetState | ''>('')
+const initialStateQuery = readQueryString('state')
+const searchInput = ref(readQueryString('search'))
+const stateFilter = ref<UsenetState | ''>(
+  ALL_STATE_SET.has(initialStateQuery) ? (initialStateQuery as UsenetState) : '',
+)
 
 const passwordVisible = ref<Record<string, boolean>>({})
 const passwordCache = ref<Record<string, string>>({})
@@ -307,9 +330,7 @@ const selectedJobs = computed(() => jobs.value.filter((j) => selectedIds.value.h
 const selectedDownloadableCount = computed(
   () => selectedJobs.value.filter((j) => !!j.nzbPath).length,
 )
-const selectedDeletableCount = computed(
-  () => selectedJobs.value.filter((j) => isTerminal(j.state)).length,
-)
+const selectedDeletableCount = computed(() => selectedJobs.value.length)
 const allOnPageSelected = computed(
   () => jobs.value.length > 0 && jobs.value.every((j) => selectedIds.value.has(j.id)),
 )
@@ -317,6 +338,15 @@ const someOnPageSelected = computed(() => jobs.value.some((j) => selectedIds.val
 
 function isTerminal(state: UsenetState): boolean {
   return TERMINAL.includes(state)
+}
+
+function syncQueryParams(): void {
+  const next: Record<string, string> = {}
+  if (searchInput.value.trim()) next.search = searchInput.value.trim()
+  if (stateFilter.value) next.state = stateFilter.value
+  if (page.value !== 1) next.page = String(page.value)
+  if (pageSize.value !== 25) next.pageSize = String(pageSize.value)
+  router.replace({ query: next })
 }
 
 async function fetchHistory(): Promise<void> {
@@ -349,6 +379,7 @@ async function fetchHistory(): Promise<void> {
 function applyFilters(): void {
   page.value = 1
   clearSelection()
+  syncQueryParams()
   fetchHistory()
 }
 
@@ -398,15 +429,14 @@ async function bulkDownloadNzbs(): Promise<void> {
 }
 
 async function bulkDelete(): Promise<void> {
-  const targets = selectedJobs.value.filter((j) => isTerminal(j.state))
+  const targets = [...selectedJobs.value]
   if (targets.length === 0) return
-  if (
-    !window.confirm(
-      `Delete ${targets.length} job(s)? Their NZB files on disk will also be removed.`,
-    )
-  ) {
-    return
+  const inFlight = targets.filter((j) => !isTerminal(j.state)).length
+  const lines = [`Delete ${targets.length} job(s)? Their NZB files on disk will also be removed.`]
+  if (inFlight > 0) {
+    lines.push(`${inFlight} job(s) are still running and will be cancelled first.`)
   }
+  if (!window.confirm(lines.join('\n'))) return
   bulkBusy.value = true
   errorMessage.value = null
   try {
@@ -445,6 +475,7 @@ function goTo(target: number): void {
   if (target < 1 || target > totalPages.value || loading.value) return
   page.value = target
   clearSelection()
+  syncQueryParams()
   fetchHistory()
 }
 
@@ -473,8 +504,9 @@ function retry(job: UsenetJobSummary): void {
 }
 
 async function confirmDelete(job: UsenetJobSummary): Promise<void> {
+  const inFlight = !isTerminal(job.state)
   const lines = [
-    `Delete this Usenet job?`,
+    inFlight ? `This job is currently ${job.state}. Cancel and delete?` : `Delete this Usenet job?`,
     ``,
     `File: ${basename(job.mediaPath)}`,
     `State: ${job.state}`,

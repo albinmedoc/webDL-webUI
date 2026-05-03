@@ -11,7 +11,10 @@ import {
   type NewDownloadJobRow,
 } from '../db/schema.js';
 import { logger } from '../utils/logger.js';
+import { appendLine as appendLogLine, downloadLogPath } from './jobLogService.js';
 
+// DB stores only the most recent slice for live tail / sync payload size.
+// Full history lives on disk via jobLogService.
 const LOG_LIMIT = 50;
 
 export type DownloadJobEvent =
@@ -189,6 +192,7 @@ export function appendLog(id: string, line: string): string[] {
     .set({ logs: JSON.stringify(next), updatedAt: Date.now() })
     .where(eq(downloadJobs.id, id))
     .run();
+  appendLogLine(downloadLogPath(id), line);
   notifyUpserted(id);
   return next;
 }
@@ -220,45 +224,58 @@ export function replaceLastProgressLog(id: string, line: string): string[] {
     .set({ logs: JSON.stringify(trimmed), updatedAt: Date.now() })
     .where(eq(downloadJobs.id, id))
     .run();
+  // On-disk log keeps every progress line, no replacement — the file is the
+  // full record, the DB is just the live tail.
+  appendLogLine(downloadLogPath(id), line);
   notifyUpserted(id);
   return trimmed;
 }
 
-export function deleteJob(id: string): void {
+export function deleteJob(id: string): DownloadJob | null {
+  const existing = getJob(id);
+  if (!existing) return null;
   getDb().delete(downloadJobs).where(eq(downloadJobs.id, id)).run();
   notify({ type: 'deleted', id });
+  return existing;
 }
 
-export function clearCompleted(): number {
-  const result = getDb()
-    .delete(downloadJobs)
+export function clearCompleted(): DownloadJob[] {
+  const db = getDb();
+  const targets = db
+    .select()
+    .from(downloadJobs)
     .where(eq(downloadJobs.status, 'completed'))
-    .run();
+    .all()
+    .map(rowToJob);
+  if (targets.length === 0) return [];
+  db.delete(downloadJobs).where(eq(downloadJobs.status, 'completed')).run();
   notify({ type: 'reset' });
-  return Number(result.changes ?? 0);
+  return targets;
 }
 
-export function clearOlderThan(daysOld: number): number {
+export function clearOlderThan(daysOld: number): DownloadJob[] {
   const cutoff = Date.now() - daysOld * 24 * 60 * 60 * 1000;
   // Don't drop active jobs regardless of age.
-  const result = getDb()
-    .delete(downloadJobs)
-    .where(
-      and(
-        lt(downloadJobs.createdAt, cutoff),
-        ne(downloadJobs.status, 'pending'),
-        ne(downloadJobs.status, 'downloading'),
-      ),
-    )
-    .run();
+  const condition = and(
+    lt(downloadJobs.createdAt, cutoff),
+    ne(downloadJobs.status, 'pending'),
+    ne(downloadJobs.status, 'downloading'),
+  );
+  const db = getDb();
+  const targets = db.select().from(downloadJobs).where(condition).all().map(rowToJob);
+  if (targets.length === 0) return [];
+  db.delete(downloadJobs).where(condition).run();
   notify({ type: 'reset' });
-  return Number(result.changes ?? 0);
+  return targets;
 }
 
-export function clearAll(): number {
-  const result = getDb().delete(downloadJobs).run();
+export function clearAll(): DownloadJob[] {
+  const db = getDb();
+  const targets = db.select().from(downloadJobs).all().map(rowToJob);
+  if (targets.length === 0) return [];
+  db.delete(downloadJobs).run();
   notify({ type: 'reset' });
-  return Number(result.changes ?? 0);
+  return targets;
 }
 
 export function recoverInterruptedJobs(): number {

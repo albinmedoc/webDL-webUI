@@ -15,6 +15,11 @@ import {
 } from '../db/schema.js';
 import { logger } from '../utils/logger.js';
 
+import {
+  appendLine as appendLogLine,
+  unlinkLogFile,
+  usenetLogPath,
+} from './jobLogService.js';
 import { checkDiskSpace } from './usenet/diskspace.js';
 import { removeNzbFile } from './usenet/nzbFiles.js';
 import { generatePassword } from './usenet/password.js';
@@ -65,6 +70,7 @@ function appendLog(jobId: string, line: string): void {
     .set({ logs: JSON.stringify(next), updatedAt: Date.now() })
     .where(eq(usenetJobs.id, jobId))
     .run();
+  appendLogLine(usenetLogPath(jobId), line);
 }
 
 function notify(jobId: string, event: JobObserverEvent, payload: unknown): void {
@@ -259,30 +265,45 @@ function startJob(jobId: string): void {
 }
 
 export function cancelJob(jobId: string): { cancelled: boolean; reason?: string } {
-  const meta = active.get(jobId);
-  if (meta) {
-    meta.abort.abort();
-    return { cancelled: true };
-  }
-
   const job = getJob(jobId);
   if (!job) return { cancelled: false, reason: 'not found' };
-
   if (TERMINAL_STATES.includes(job.state)) {
     return { cancelled: false, reason: `already ${job.state}` };
   }
 
-  if (job.state === 'queued') {
-    getDb()
-      .update(usenetJobs)
-      .set({ state: 'cancelled', updatedAt: Date.now(), error: 'cancelled before start' })
-      .where(eq(usenetJobs.id, jobId))
-      .run();
-    notify(jobId, 'state', 'cancelled');
+  const meta = active.get(jobId);
+  if (meta) {
+    // Pipeline is running — abort propagates into rar/parpar/nyuu and the
+    // pipeline's own catch transitions the job to `cancelled`.
+    meta.abort.abort();
     return { cancelled: true };
   }
 
-  return { cancelled: false, reason: `unsupported state ${job.state}` };
+  // Non-terminal but not active: queued, or stale state from a crash before
+  // recovery ran. Mark cancelled directly.
+  getDb()
+    .update(usenetJobs)
+    .set({
+      state: 'cancelled',
+      updatedAt: Date.now(),
+      error: job.state === 'queued' ? 'cancelled before start' : 'cancelled',
+    })
+    .where(eq(usenetJobs.id, jobId))
+    .run();
+  notify(jobId, 'state', 'cancelled');
+  return { cancelled: true };
+}
+
+async function waitForJobInactive(jobId: string, timeoutMs = 30_000): Promise<void> {
+  if (!isActive(jobId)) return;
+  const start = Date.now();
+  while (isActive(jobId)) {
+    if (Date.now() - start > timeoutMs) {
+      logger.warn('Timed out waiting for usenet job to wind down', { jobId });
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
 }
 
 export function retryJob(jobId: string): { retried: boolean; reason?: string } {
@@ -318,9 +339,24 @@ export async function deleteJob(
 ): Promise<{ deleted: boolean; reason?: string; state?: UsenetJobState }> {
   const job = getJob(jobId);
   if (!job) return { deleted: false, reason: 'not found' };
-  if (isActive(jobId)) return { deleted: false, reason: 'active', state: job.state };
 
-  if (job.nzbPath) await removeNzbFile(job.nzbPath);
+  // Cancel in-flight before deleting so the pipeline doesn't write to a row
+  // we're about to remove, and child processes (rar/parpar/nyuu) get killed.
+  if (!TERMINAL_STATES.includes(job.state)) {
+    const cancelResult = cancelJob(jobId);
+    if (!cancelResult.cancelled) {
+      return {
+        deleted: false,
+        reason: cancelResult.reason ?? 'cancel failed',
+        state: job.state,
+      };
+    }
+    await waitForJobInactive(jobId);
+  }
+
+  const final = getJob(jobId);
+  if (final?.nzbPath) await removeNzbFile(final.nzbPath);
+  await unlinkLogFile(usenetLogPath(jobId));
 
   getDb().delete(usenetJobs).where(eq(usenetJobs.id, jobId)).run();
   logger.info('Usenet job deleted', { id: jobId });

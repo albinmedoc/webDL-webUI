@@ -4,7 +4,9 @@ import {
   DownloadStartData,
   DownloadCancelData,
   DownloadRemoveData,
+  DownloadClearCompletedData,
   DownloadClearOldData,
+  DownloadClearAllData,
 } from '../handlers/downloadHandler.js';
 import { UsenetHandler } from '../handlers/usenetHandler.js';
 import type {
@@ -41,16 +43,16 @@ export class SocketController {
         downloadHandler.handleRemoveJob(data);
       });
 
-      socket.on('clear-completed-downloads', () => {
-        downloadHandler.handleClearCompleted();
+      socket.on('clear-completed-downloads', (data: DownloadClearCompletedData) => {
+        downloadHandler.handleClearCompleted(data);
       });
 
       socket.on('clear-old-downloads', (data: DownloadClearOldData) => {
         downloadHandler.handleClearOld(data);
       });
 
-      socket.on('clear-all-downloads', () => {
-        downloadHandler.handleClearAll();
+      socket.on('clear-all-downloads', (data: DownloadClearAllData) => {
+        downloadHandler.handleClearAll(data);
       });
 
       socket.on('sync-downloads', () => {
