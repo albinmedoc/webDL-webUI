@@ -77,4 +77,5 @@ LABEL org.opencontainers.image.created="${BUILDTIME}"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${REVISION}"
 
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["tsx", "src/backend/server.ts"]
