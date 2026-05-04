@@ -215,17 +215,22 @@ export async function startUploadWatcher(): Promise<void> {
   // file and the user can delete one.
   await rescan();
 
-  // Subscribe once for the whole process — when a job hits `done`, remove the
-  // symlink so we don't reprocess it on next startup.
+  // Subscribe once for the whole process — when a job reaches a terminal state
+  // (done/failed/cancelled) the symlink is no longer useful, so remove it. This
+  // also prevents reprocessing on next startup.
   subscribe((jobId, event, payload) => {
-    if (event !== 'state' || payload !== 'done') return;
+    if (event !== 'state') return;
+    if (payload !== 'done' && payload !== 'failed' && payload !== 'cancelled') return;
     const job = getJob(jobId);
     if (!job) return;
     if (path.dirname(job.mediaPath) !== dir) return;
     fsp.unlink(job.mediaPath).then(
       () => {
         enqueued.delete(job.mediaPath);
-        logger.info('Removed upload symlink after successful post', { path: job.mediaPath });
+        logger.info('Removed upload symlink after job terminal state', {
+          path: job.mediaPath,
+          state: payload,
+        });
       },
       (err) => logger.debug('Failed to remove upload symlink', {
         path: job.mediaPath,

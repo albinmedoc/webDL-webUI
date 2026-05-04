@@ -105,22 +105,6 @@ function transition(jobId: string, patch: Partial<UsenetJob>): void {
     .run();
 }
 
-async function findExistingFiles(workDir: string, baseName: string): Promise<{ partFiles: string[]; par2Files: string[] }> {
-  let entries: string[] = [];
-  try {
-    entries = await fs.readdir(workDir);
-  } catch {
-    return { partFiles: [], par2Files: [] };
-  }
-  const escaped = baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const rarRe = new RegExp(`^${escaped}\\.(rar|part\\d+\\.rar)$`);
-  const par2Re = new RegExp(`^${escaped}\\.(par2|vol\\d+\\+\\d+\\.par2)$`);
-  return {
-    partFiles: entries.filter((n) => rarRe.test(n)).sort().map((n) => path.join(workDir, n)),
-    par2Files: entries.filter((n) => par2Re.test(n)).sort().map((n) => path.join(workDir, n)),
-  };
-}
-
 export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineResult> {
   const { jobId, signal, events } = opts;
   const job = loadJob(jobId);
@@ -186,9 +170,6 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineRes
         if (err instanceof AbortError) throw err;
         throw new StageError(`archive failed: ${(err as Error).message}`, 'archiving');
       }
-    } else {
-      const existing = await findExistingFiles(workDir, baseName);
-      partFiles = existing.partFiles;
     }
 
     if (shouldRun('par2', startState)) {
@@ -207,9 +188,6 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineRes
         if (err instanceof AbortError) throw err;
         throw new StageError(`par2 failed: ${(err as Error).message}`, 'par2');
       }
-    } else {
-      const existing = await findExistingFiles(workDir, baseName);
-      par2Files = existing.par2Files;
     }
 
     if (shouldRun('posting', startState)) {
@@ -286,9 +264,7 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineRes
           { jobId }
         );
       }
-      if (current !== 'indexing') {
-        await removeJobWorkDir(jobId);
-      }
+      await removeJobWorkDir(jobId);
       return { finalState: 'cancelled' };
     }
 
@@ -298,9 +274,7 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineRes
     logger.error('Usenet pipeline failed', { jobId, stage, error: message });
     transition(jobId, { state: 'failed', failureState: stage, error: message });
     events?.onStateChanged?.('failed');
-    if (stage !== 'indexing') {
-      await removeJobWorkDir(jobId);
-    }
+    await removeJobWorkDir(jobId);
     return { finalState: 'failed' };
   }
 }
