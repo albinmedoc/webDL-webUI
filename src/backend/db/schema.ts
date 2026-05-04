@@ -96,3 +96,65 @@ export const appSettings = sqliteTable('app_settings', {
 });
 
 export type AppSetting = typeof appSettings.$inferSelect;
+
+export const WEBHOOK_EVENTS = [
+  'download.queued',
+  'download.started',
+  'download.completed',
+  'download.failed',
+  'download.cancelled',
+  'usenet.queued',
+  'usenet.posted',
+  'usenet.done',
+  'usenet.failed',
+  'usenet.cancelled',
+] as const;
+
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+
+export const webhooks = sqliteTable('webhooks', {
+  id: text('id').primaryKey(),
+  url: text('url').notNull(),
+  // HMAC-SHA256 secret. Empty string = no signature header sent.
+  secret: text('secret').notNull().default(''),
+  // JSON-encoded array of WebhookEvent strings. Empty array = subscribe to all.
+  events: text('events').notNull().default('[]'),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  // Optional extra headers, JSON-encoded { name: value } map.
+  headers: text('headers'),
+  description: text('description'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type WebhookRow = typeof webhooks.$inferSelect;
+export type NewWebhookRow = typeof webhooks.$inferInsert;
+
+export const WEBHOOK_DELIVERY_STATES = [
+  'pending',
+  'delivered',
+  'retrying',
+  'failed',
+] as const;
+
+export type WebhookDeliveryState = (typeof WEBHOOK_DELIVERY_STATES)[number];
+
+export const webhookDeliveries = sqliteTable('webhook_deliveries', {
+  id: text('id').primaryKey(),
+  webhookId: text('webhook_id').notNull(),
+  event: text('event').notNull(),
+  payload: text('payload').notNull(),
+  state: text('state', { enum: WEBHOOK_DELIVERY_STATES }).notNull().default('pending'),
+  attempt: integer('attempt').notNull().default(0),
+  statusCode: integer('status_code'),
+  responseSnippet: text('response_snippet'),
+  error: text('error'),
+  // Wall-clock ms timestamp the next retry should fire at. NULL once delivered/failed.
+  nextRetryAt: integer('next_retry_at'),
+  deliveredAt: integer('delivered_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type WebhookDeliveryRow = typeof webhookDeliveries.$inferSelect;
+export type NewWebhookDeliveryRow = typeof webhookDeliveries.$inferInsert;

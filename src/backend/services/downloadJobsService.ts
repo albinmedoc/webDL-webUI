@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 
-import { eq, inArray, desc, lt, and, ne } from 'drizzle-orm';
+import { eq, inArray, desc, lt, and, ne, sql, type SQL } from 'drizzle-orm';
 
 import { getDb } from '../db/client.js';
 import {
@@ -130,6 +130,49 @@ export function listJobs(limit = 200): DownloadJob[] {
     .limit(limit)
     .all()
     .map(rowToJob);
+}
+
+export interface ListDownloadJobsQuery {
+  page?: number;
+  pageSize?: number;
+  status?: DownloadJobState | null;
+}
+
+export interface ListDownloadJobsResult {
+  jobs: DownloadJob[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export function listJobsPaginated(
+  query: ListDownloadJobsQuery = {},
+): ListDownloadJobsResult {
+  const page = Math.max(1, Math.floor(query.page ?? 1));
+  const pageSize = Math.min(200, Math.max(1, Math.floor(query.pageSize ?? 25)));
+  const offset = (page - 1) * pageSize;
+
+  const conditions: SQL[] = [];
+  if (query.status) conditions.push(eq(downloadJobs.status, query.status));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const rows = getDb()
+    .select()
+    .from(downloadJobs)
+    .where(whereClause)
+    .orderBy(desc(downloadJobs.createdAt))
+    .limit(pageSize)
+    .offset(offset)
+    .all();
+
+  const totalRow = getDb()
+    .select({ count: sql<number>`count(*)` })
+    .from(downloadJobs)
+    .where(whereClause)
+    .get();
+  const total = Number(totalRow?.count ?? 0);
+
+  return { jobs: rows.map(rowToJob), total, page, pageSize };
 }
 
 export function getJob(id: string): DownloadJob | null {

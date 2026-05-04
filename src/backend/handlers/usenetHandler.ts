@@ -1,7 +1,6 @@
 import type { Socket } from 'socket.io';
 
 import { usenetConfig } from '../config/usenetConfig.js';
-import type { UsenetJob } from '../db/schema.js';
 import { getJob as getDownloadJob, appendLog as appendDownloadLog } from '../services/downloadJobsService.js';
 import { dropForUpload } from '../services/uploadWatcher.js';
 import {
@@ -12,58 +11,15 @@ import {
   subscribe,
   type JobObserver,
 } from '../services/usenetService.js';
+import { toUsenetJobSummary as toSummary } from '../services/usenetSummary.js';
 import { runSeasonPackForDownload } from '../services/usenet/seasonPackEnqueue.js';
 import type {
-  UsenetJobSummary,
   UsenetPackAsSeason,
   UsenetUploadCancel,
   UsenetUploadRetry,
   UsenetUploadStart,
 } from '../types/socket.js';
 import { logger } from '../utils/logger.js';
-
-function parseLogs(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function parseMediaPaths(raw: string | null | undefined): string[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every((s) => typeof s === 'string')) return parsed;
-  } catch {
-    // fallthrough
-  }
-  return null;
-}
-
-function toSummary(job: UsenetJob): UsenetJobSummary {
-  return {
-    id: job.id,
-    downloadId: job.downloadId,
-    mediaPath: job.mediaPath,
-    mediaPaths: parseMediaPaths(job.mediaPaths),
-    releaseType: job.releaseType,
-    episodeCount: job.episodeCount,
-    mediaSizeBytes: job.mediaSizeBytes,
-    state: job.state,
-    failureState: job.failureState,
-    progress: job.progress,
-    nzbPath: job.nzbPath,
-    error: job.error,
-    indexerResponse: job.indexerResponse,
-    category: job.category,
-    logs: parseLogs(job.logs),
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-  };
-}
 
 export class UsenetHandler {
   private socket: Socket;

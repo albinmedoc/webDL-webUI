@@ -67,6 +67,10 @@ function applyToSingleton(key: RegistryKey, value: unknown): void {
     serverConfig.seasonPackSkipLatest = value as boolean;
     return;
   }
+  if (key === 'apiKey') {
+    serverConfig.apiKey = value as string;
+    return;
+  }
 
   switch (key) {
     case 'hookScript':
@@ -91,6 +95,7 @@ function readEffective(key: RegistryKey): unknown {
   if (key === 'svtplaydlFilenameTemplate') return serverConfig.svtplaydlFilenameTemplate;
   if (key === 'svtplaydlProxy') return serverConfig.svtplaydlProxy;
   if (key === 'seasonPackSkipLatest') return serverConfig.seasonPackSkipLatest;
+  if (key === 'apiKey') return serverConfig.apiKey;
   switch (key) {
     case 'hookScript':
     case 'nzbOutputDir':

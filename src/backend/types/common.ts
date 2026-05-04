@@ -5,6 +5,7 @@ export interface ServerConfig {
   svtplaydlFilenameTemplate: string;
   svtplaydlProxy: string;
   seasonPackSkipLatest: boolean;
+  apiKey: string;
   cors: {
     origin: string;
     methods: string[];

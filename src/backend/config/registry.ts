@@ -16,7 +16,8 @@ export type ConfigGroup =
   | 'release'
   | 'workdir'
   | 'indexer'
-  | 'download';
+  | 'download'
+  | 'api';
 
 export type ConfigKind = 'string' | 'boolean' | 'integer' | 'float' | 'list' | 'shellArgs';
 
@@ -95,6 +96,12 @@ export const REGISTRY = defineRegistry({
   // Skip the highest season number when auto-packing — guards against packing
   // an ongoing/unfinished season. Manual pack-as-season action ignores this.
   seasonPackSkipLatest:  { key: 'seasonPackSkipLatest',  envVar: 'SEASON_PACK_SKIP_LATEST',         group: 'download',   kind: 'boolean', default: true                                   },
+
+  // REST API key. When non-empty, every /api/* write request must present
+  // `Authorization: Bearer <key>`. Empty disables auth (back-compat with the
+  // socket-only deployment). Reads stay open either way.
+  apiKey:                { key: 'apiKey',                envVar: 'API_KEY',                         group: 'api',        kind: 'string',  default: '', sensitive: true,
+    description: 'Bearer token required for REST write endpoints. Empty = auth disabled.' },
 });
 
 export type RegistryKey = keyof typeof REGISTRY;

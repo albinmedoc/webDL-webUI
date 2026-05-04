@@ -43,6 +43,13 @@
       "when": 1777835098138,
       "tag": "0005_secret_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1777910172621,
+      "tag": "0006_fast_starjammers",
+      "breakpoints": true
     }
   ]
 }

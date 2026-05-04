@@ -23,6 +23,10 @@ export const config: ServerConfig = {
     REGISTRY.seasonPackSkipLatest,
     process.env[REGISTRY.seasonPackSkipLatest.envVar],
   ) as boolean,
+  apiKey: parseValue(
+    REGISTRY.apiKey,
+    process.env[REGISTRY.apiKey.envVar],
+  ) as string,
   cors: {
     origin: "http://localhost:5173",
     methods: ["GET", "POST"]

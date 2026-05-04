@@ -15,6 +15,7 @@ import { startRetentionScheduler } from './services/usenet/nzbRetention.js';
 import { detectTools } from './services/usenet/tools.js';
 import { startUploadWatcher } from './services/uploadWatcher.js';
 import { startupKick as kickUsenetQueue } from './services/usenetService.js';
+import { startWebhookDispatcher } from './services/webhookDispatcher.js';
 import { setupMiddleware, setupRoutes } from './middleware/setup.js';
 import { SocketController } from './controllers/socketController.js';
 import { writeSvtplayDlConfig } from './services/svtplayDlConfig.js';
@@ -58,6 +59,7 @@ export function createApp(): AppComponents {
   void detectTools();
 
   startRetentionScheduler();
+  startWebhookDispatcher();
 
   const app = express();
   const server = createServer(app);
