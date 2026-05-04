@@ -60,17 +60,8 @@ import {
   type WebhookEvent,
 } from '../services/webhooksService.js';
 import { sendTestDelivery } from '../services/webhookDispatcher.js';
+import { toUsenetJobSummary } from '../services/usenetSummary.js';
 import { logger } from '../utils/logger.js';
-
-function parseLogsField(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 export function setupMiddleware(app: Application, rootDir: string): void {
   // CORS middleware
@@ -182,10 +173,7 @@ export function setupRoutes(app: Application, rootDir: string): void {
 
     const result = listJobsPaginated({ page, pageSize, state, search });
     res.json({
-      jobs: result.jobs.map(({ rarPassword: _omit, logs, ...rest }) => ({
-        ...rest,
-        logs: parseLogsField(logs),
-      })),
+      jobs: result.jobs.map(toUsenetJobSummary),
       total: result.total,
       page: result.page,
       pageSize: result.pageSize,
@@ -202,7 +190,7 @@ export function setupRoutes(app: Application, rootDir: string): void {
       res.status(404).json({ error: 'job not found' });
       return;
     }
-    res.json({ ...job, logs: parseLogsField(job.logs) });
+    res.json(toUsenetJobSummary(job));
   });
 
   app.post('/api/usenet/jobs/bulk-delete', async (req: Request, res: Response) => {
