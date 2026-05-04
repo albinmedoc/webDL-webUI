@@ -1,10 +1,12 @@
+import fs from 'fs/promises';
 import path from 'path';
 
 import { logger } from '../../utils/logger.js';
+import { snapshotDir } from '../../utils/dirSnapshot.js';
 import type { DownloadJob } from '../downloadJobsService.js';
 import { enqueueJob } from '../usenetService.js';
 
-import { renderSeasonReleaseName } from './releaseNamer.js';
+import { parseSvtplayDlFilename, renderSeasonReleaseName } from './releaseNamer.js';
 import {
   checkSeasonPackEligibility,
   summarizeEligibility,
@@ -67,6 +69,7 @@ export async function runSeasonPackForDownload(
         downloadJob.id,
         entry.group,
         downloadJob.resolution,
+        downloadJob.outputDir,
         opts.appendDownloadLog,
       );
       if (jobId) result.jobIds.push(jobId);
@@ -91,13 +94,92 @@ export async function runSeasonPackForDownload(
   return result;
 }
 
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve each group member to a path that currently exists on disk. Tries
+ * the stored path first; if missing, rescans the job's outputDir and matches
+ * by parsed (season, episode). Lets the user rename files post-download (a
+ * common workflow with external renamers) without breaking the pack.
+ *
+ * Throws when any member can't be located after the rescan.
+ */
+async function resolveExistingPackPaths(
+  group: SeasonGroup,
+  jobOutputDir: string | null,
+  appendDownloadLog: (line: string) => void,
+): Promise<string[]> {
+  const stored = group.files.map((f) => f.path);
+
+  const existence = await Promise.all(stored.map((p) => pathExists(p)));
+  if (existence.every(Boolean)) return stored;
+
+  const missingCount = existence.filter((e) => !e).length;
+  if (!jobOutputDir) {
+    throw new Error(
+      `${missingCount} pack member(s) missing on disk and job has no outputDir to rescan`,
+    );
+  }
+
+  appendDownloadLog(
+    `Season pack: ${missingCount} of ${stored.length} stored path(s) missing for S${group.season}; rescanning ${jobOutputDir}`,
+  );
+
+  const snapshot = await snapshotDir(jobOutputDir);
+  const onDiskByEp = new Map<string, string>();
+  for (const diskPath of snapshot.keys()) {
+    const parsed = parseSvtplayDlFilename(path.basename(diskPath));
+    if (!parsed?.season || !parsed.episode) continue;
+    const key = `${parsed.season}::${parsed.episode}`;
+    if (!onDiskByEp.has(key)) onDiskByEp.set(key, diskPath);
+  }
+
+  const resolved: string[] = [];
+  const stillMissing: string[] = [];
+  for (let i = 0; i < stored.length; i++) {
+    if (existence[i]) {
+      resolved.push(stored[i]);
+      continue;
+    }
+    const parsed = parseSvtplayDlFilename(path.basename(stored[i]));
+    const key = parsed?.season && parsed.episode ? `${parsed.season}::${parsed.episode}` : null;
+    const replacement = key ? onDiskByEp.get(key) : undefined;
+    if (replacement) {
+      resolved.push(replacement);
+      appendDownloadLog(
+        `Season pack: matched renamed file ${path.basename(stored[i])} → ${path.basename(replacement)}`,
+      );
+    } else {
+      stillMissing.push(stored[i]);
+    }
+  }
+
+  if (stillMissing.length > 0) {
+    throw new Error(
+      `${stillMissing.length} pack member(s) could not be located after rescan: ${stillMissing
+        .map((p) => path.basename(p))
+        .join(', ')}`,
+    );
+  }
+
+  return resolved;
+}
+
 async function enqueuePackForGroup(
   downloadId: string,
   group: SeasonGroup,
   resolution: number | null,
+  jobOutputDir: string | null,
   appendDownloadLog: (line: string) => void,
 ): Promise<string | null> {
-  const mediaPaths = group.files.map((f) => f.path);
+  const mediaPaths = await resolveExistingPackPaths(group, jobOutputDir, appendDownloadLog);
   const named = await renderSeasonReleaseName(mediaPaths, {
     quality: resolution ? String(resolution) : null,
   });

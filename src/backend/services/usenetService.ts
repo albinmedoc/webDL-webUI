@@ -174,13 +174,29 @@ export function activeCount(): number {
   return active.size;
 }
 
-async function statSize(filePath: string): Promise<number> {
+interface StatResult {
+  size: number;
+  /** null = stat succeeded; otherwise the errno code (ENOENT, EACCES, etc.) */
+  errorCode: string | null;
+}
+
+async function statSize(filePath: string): Promise<StatResult> {
   try {
     const stat = await fs.stat(filePath);
-    return Number(stat.size);
-  } catch {
-    return 0;
+    return { size: Number(stat.size), errorCode: null };
+  } catch (err) {
+    return { size: 0, errorCode: (err as NodeJS.ErrnoException).code ?? 'UNKNOWN' };
   }
+}
+
+function describeStatFailure(filePath: string, result: StatResult, label: string): string {
+  if (result.errorCode === 'ENOENT') {
+    return `${label} not found on disk: ${filePath}`;
+  }
+  if (result.errorCode) {
+    return `${label} stat failed (${result.errorCode}): ${filePath}`;
+  }
+  return `${label} is empty (0 bytes): ${filePath}`;
 }
 
 export async function enqueueJob(input: EnqueueJobInput): Promise<UsenetJob> {
@@ -195,17 +211,18 @@ export async function enqueueJob(input: EnqueueJobInput): Promise<UsenetJob> {
   let mediaSize = 0;
   if (isPack) {
     for (const p of input.mediaPaths!) {
-      const size = await statSize(p);
-      if (size <= 0) {
-        throw new Error(`pack member has zero/unknown size: ${p}`);
+      const result = await statSize(p);
+      if (result.size <= 0) {
+        throw new Error(describeStatFailure(p, result, 'pack member'));
       }
-      mediaSize += size;
+      mediaSize += result.size;
     }
   } else {
-    mediaSize = await statSize(input.mediaPath);
-    if (mediaSize <= 0) {
-      throw new Error(`mediaPath has zero/unknown size: ${input.mediaPath}`);
+    const result = await statSize(input.mediaPath);
+    if (result.size <= 0) {
+      throw new Error(describeStatFailure(input.mediaPath, result, 'mediaPath'));
     }
+    mediaSize = result.size;
   }
 
   const workRoot = getWorkRoot();

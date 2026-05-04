@@ -598,8 +598,8 @@ function postJob(job: DownloadJob): void {
 function packAsSeason(job: DownloadJob): void {
   if (
     !window.confirm(
-      `Pack ${job.files.length} file(s) as a season and post to Usenet?\n` +
-        'Eligibility (contiguous E01..ENMax) is enforced server-side; results land in the download log.',
+      `Pack ${job.files.length} file(s) into season packs and post to Usenet?\n` +
+        'Files are grouped per season; eligibility (contiguous E01..ENMax) is enforced per season server-side. Results land in the download log.',
     )
   )
     return
