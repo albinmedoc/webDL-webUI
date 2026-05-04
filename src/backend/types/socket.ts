@@ -2,6 +2,7 @@ export interface DownloadRequest {
   url: string;
   args: string[];
   autoPostUsenet?: boolean;
+  autoPackSeason?: boolean;
 }
 
 export interface DownloadProgress {
@@ -79,6 +80,16 @@ export interface UsenetUploadStart {
   applyNaming?: boolean;
 }
 
+export interface UsenetPackAsSeason {
+  downloadId: string;
+}
+
+export interface UsenetPackAsSeasonResponse {
+  downloadId: string;
+  jobIds: string[];
+  skipped: { show: string; season: string; reason: string }[];
+}
+
 export interface UsenetUploadCancel {
   jobId: string;
 }
@@ -91,6 +102,9 @@ export interface UsenetJobSummary {
   id: string;
   downloadId: string | null;
   mediaPath: string;
+  mediaPaths: string[] | null;
+  releaseType: 'single' | 'season';
+  episodeCount: number | null;
   mediaSizeBytes: number;
   state: string;
   failureState: string | null;

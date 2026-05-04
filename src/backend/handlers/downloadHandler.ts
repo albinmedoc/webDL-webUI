@@ -12,6 +12,7 @@ import {
   isAllowedExtension,
   normalizeExtensions,
 } from '../services/usenet/extensionFilter.js';
+import { runSeasonPackForDownload } from '../services/usenet/seasonPackEnqueue.js';
 import { ProgressParser, ValidationUtils } from '../utils/progressUtils.js';
 import { DownloadRequest } from '../types/index.js';
 import { logger } from '../utils/logger.js';
@@ -59,6 +60,7 @@ export interface DownloadJobOptions {
   resolution?: number | null;
   allEpisodes?: boolean;
   autoPostUsenet?: boolean;
+  autoPackSeason?: boolean;
 }
 
 export interface DownloadStartData extends DownloadRequest {
@@ -143,6 +145,7 @@ export function createDownloadHandler(socket: Socket, usenetHandler: UsenetHandl
         resolution: opts.resolution ?? null,
         allEpisodes: opts.allEpisodes ?? false,
         autoPostUsenet: opts.autoPostUsenet ?? !!data.autoPostUsenet,
+        autoPackSeason: opts.autoPackSeason ?? !!data.autoPackSeason,
       });
       downloadId = job.id;
       const id = downloadId;
@@ -222,7 +225,18 @@ export function createDownloadHandler(socket: Socket, usenetHandler: UsenetHandl
           });
           downloadJobs.appendLog(id, 'Download completed successfully');
 
-          if (data.autoPostUsenet && usenetConfig.enabled && tracked && tracked.files.length > 0) {
+          const wantPostEpisodes = !!data.autoPostUsenet;
+          const wantPackSeason = !!data.autoPackSeason;
+
+          if ((wantPostEpisodes || wantPackSeason) && !usenetConfig.enabled) {
+            logger.warn('auto-post requested but USENET_ENABLED=false', {
+              downloadId: id,
+              autoPostUsenet: wantPostEpisodes,
+              autoPackSeason: wantPackSeason,
+            });
+          }
+
+          if (wantPostEpisodes && usenetConfig.enabled && tracked && tracked.files.length > 0) {
             const quality = opts.resolution ?? null;
             const allowed = normalizeExtensions(usenetConfig.allowedExtensions);
             for (const file of tracked.files) {
@@ -241,8 +255,27 @@ export function createDownloadHandler(socket: Socket, usenetHandler: UsenetHandl
                 applyNaming: true,
               });
             }
-          } else if (data.autoPostUsenet && !usenetConfig.enabled) {
-            logger.warn('autoPostUsenet requested but USENET_ENABLED=false', { downloadId: id });
+          }
+
+          // Season pack auto-trigger runs *additively* after per-episode
+          // posts: enabling pack-on-complete does not suppress per-episode
+          // posts (and vice versa). The eligibility helper enforces
+          // allEpisodes + completeness + skip-latest in non-manual mode.
+          if (wantPackSeason && usenetConfig.enabled && tracked && tracked.files.length > 0) {
+            const refreshed = downloadJobs.getJob(id);
+            if (refreshed) {
+              try {
+                await runSeasonPackForDownload(refreshed, {
+                  manual: false,
+                  appendDownloadLog: (line) => downloadJobs.appendLog(id, line),
+                });
+              } catch (err) {
+                logger.warn('runSeasonPackForDownload failed', {
+                  downloadId: id,
+                  error: (err as Error).message,
+                });
+              }
+            }
           }
         } else {
           outputTracker.discard(id);

@@ -91,6 +91,10 @@ export const REGISTRY = defineRegistry({
 
   // Optional HTTP/HTTPS/SOCKS proxy passed to svtplay-dl. Empty = no proxy.
   svtplaydlProxy:        { key: 'svtplaydlProxy',        envVar: 'SVTPLAYDL_PROXY',                 group: 'download',   kind: 'string',  default: '', sensitive: true                    },
+
+  // Skip the highest season number when auto-packing — guards against packing
+  // an ongoing/unfinished season. Manual pack-as-season action ignores this.
+  seasonPackSkipLatest:  { key: 'seasonPackSkipLatest',  envVar: 'SEASON_PACK_SKIP_LATEST',         group: 'download',   kind: 'boolean', default: true                                   },
 });
 
 export type RegistryKey = keyof typeof REGISTRY;

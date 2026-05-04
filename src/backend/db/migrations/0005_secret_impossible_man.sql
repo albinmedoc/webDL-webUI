@@ -1,0 +1,1 @@
+ALTER TABLE `download_jobs` ADD `auto_pack_season` integer DEFAULT false NOT NULL;

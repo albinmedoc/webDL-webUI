@@ -2,6 +2,7 @@ import type { Socket } from 'socket.io';
 
 import { usenetConfig } from '../config/usenetConfig.js';
 import type { UsenetJob } from '../db/schema.js';
+import { getJob as getDownloadJob, appendLog as appendDownloadLog } from '../services/downloadJobsService.js';
 import { dropForUpload } from '../services/uploadWatcher.js';
 import {
   cancelJob,
@@ -11,8 +12,10 @@ import {
   subscribe,
   type JobObserver,
 } from '../services/usenetService.js';
+import { runSeasonPackForDownload } from '../services/usenet/seasonPackEnqueue.js';
 import type {
   UsenetJobSummary,
+  UsenetPackAsSeason,
   UsenetUploadCancel,
   UsenetUploadRetry,
   UsenetUploadStart,
@@ -29,11 +32,25 @@ function parseLogs(raw: string | null | undefined): string[] {
   }
 }
 
+function parseMediaPaths(raw: string | null | undefined): string[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((s) => typeof s === 'string')) return parsed;
+  } catch {
+    // fallthrough
+  }
+  return null;
+}
+
 function toSummary(job: UsenetJob): UsenetJobSummary {
   return {
     id: job.id,
     downloadId: job.downloadId,
     mediaPath: job.mediaPath,
+    mediaPaths: parseMediaPaths(job.mediaPaths),
+    releaseType: job.releaseType,
+    episodeCount: job.episodeCount,
     mediaSizeBytes: job.mediaSizeBytes,
     state: job.state,
     failureState: job.failureState,
@@ -163,5 +180,36 @@ export class UsenetHandler {
   handleSyncUploads(): void {
     const jobs = listJobs(200).map(toSummary);
     this.socket.emit('usenet-sync', { jobs });
+  }
+
+  /**
+   * Manual "pack as season" action: triggered from the Downloads view on a
+   * completed download. Bypasses the `allEpisodes` and skip-latest gates
+   * (explicit user opt-in) but still enforces the contiguous-from-1
+   * completeness check — packing partial seasons is a known foot-gun.
+   */
+  async handlePackAsSeason(data: UsenetPackAsSeason): Promise<void> {
+    if (!this.requireEnabled()) return;
+    if (!data?.downloadId) {
+      this.socket.emit('usenet-error', { error: 'downloadId is required' });
+      return;
+    }
+
+    const downloadJob = getDownloadJob(data.downloadId);
+    if (!downloadJob) {
+      this.socket.emit('usenet-error', { error: `download ${data.downloadId} not found` });
+      return;
+    }
+
+    const result = await runSeasonPackForDownload(downloadJob, {
+      manual: true,
+      appendDownloadLog: (line) => appendDownloadLog(downloadJob.id, line),
+    });
+
+    this.socket.emit('usenet-pack-as-season-result', {
+      downloadId: downloadJob.id,
+      jobIds: result.jobIds,
+      skipped: result.skipped,
+    });
   }
 }

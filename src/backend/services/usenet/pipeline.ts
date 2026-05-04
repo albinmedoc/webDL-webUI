@@ -65,6 +65,31 @@ function deriveBaseName(mediaPath: string): string {
   return path.basename(mediaPath, ext);
 }
 
+/**
+ * Resolve the file list to pack. Season-pack jobs persist the full list as
+ * JSON in `mediaPaths`; legacy/single-file jobs leave it null and we fall
+ * back to a one-element array built from `mediaPath`.
+ */
+function resolveMediaPaths(job: UsenetJob): string[] {
+  if (job.mediaPaths) {
+    try {
+      const parsed = JSON.parse(job.mediaPaths);
+      if (Array.isArray(parsed) && parsed.every((p) => typeof p === 'string') && parsed.length > 0) {
+        return parsed;
+      }
+      logger.warn('usenet job mediaPaths malformed; falling back to single file', {
+        jobId: job.id,
+      });
+    } catch (err) {
+      logger.warn('usenet job mediaPaths is not JSON; falling back to single file', {
+        jobId: job.id,
+        error: (err as Error).message,
+      });
+    }
+  }
+  return [job.mediaPath];
+}
+
 function loadJob(jobId: string): UsenetJob {
   const db = getDb();
   const job = db.select().from(usenetJobs).where(eq(usenetJobs.id, jobId)).get();
@@ -108,7 +133,11 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineRes
   await detectTools();
 
   const workDir = getJobWorkDir(jobId);
+  // For season packs, the *primary* mediaPath drives the base name (which is
+  // already the canonical pack name set when the job was enqueued). For
+  // single-file jobs this is a no-op since mediaPaths === [mediaPath].
   const baseName = deriveBaseName(job.mediaPath);
+  const mediaPaths = resolveMediaPaths(job);
   const nzbPath = job.nzbPath ?? path.join(indexerConfig.nzbOutputDir, `${baseName}.nzb`);
   let partFiles: string[] = [];
   let par2Files: string[] = [];
@@ -143,7 +172,7 @@ export async function runPipeline(opts: RunPipelineOptions): Promise<PipelineRes
       await createJobWorkDir(jobId);
       try {
         const result = await createArchive({
-          mediaPath: job.mediaPath,
+          mediaPaths,
           workDir,
           password: job.rarPassword,
           baseName,

@@ -4,6 +4,7 @@ export interface ServerConfig {
   uploadWatchDir: string;
   svtplaydlFilenameTemplate: string;
   svtplaydlProxy: string;
+  seasonPackSkipLatest: boolean;
   cors: {
     origin: string;
     methods: string[];

@@ -103,12 +103,30 @@
                 />
                 <label for="autoPostUsenet" class="form-check-label fw-semibold">
                   <i class="bi bi-cloud-upload me-1"></i>
-                  Auto-post to Usenet after download
+                  Auto-post episodes to Usenet after download
                 </label>
+              </div>
+              <div class="form-check mt-2">
+                <input
+                  id="autoPackSeason"
+                  v-model="downloadStore.currentOptions.autoPackSeason"
+                  type="checkbox"
+                  class="form-check-input"
+                />
+                <label for="autoPackSeason" class="form-check-label fw-semibold">
+                  <i class="bi bi-collection me-1"></i>
+                  Also build & post a season pack
+                </label>
+                <div class="form-text">
+                  Independent of per-episode posting. Requires a contiguous
+                  season (E01..ENMax); the latest season is skipped by default
+                  to avoid packing an ongoing run.
+                </div>
               </div>
               <div
                 v-if="
-                  downloadStore.currentOptions.autoPostUsenet &&
+                  (downloadStore.currentOptions.autoPostUsenet ||
+                    downloadStore.currentOptions.autoPackSeason) &&
                   usenetStore.tools &&
                   !usenetStore.tools.rar
                 "

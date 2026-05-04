@@ -8,7 +8,9 @@ import { AbortError, attachAbort } from './spawnUtil.js';
 import { getCachedTools } from './tools.js';
 
 export interface CreateArchiveOptions {
-  mediaPath: string;
+  // One or more files to pack into the same RAR set. Single-file uploads pass
+  // a one-element array; season packs pass every episode.
+  mediaPaths: string[];
   workDir: string;
   password: string;
   baseName: string;
@@ -41,7 +43,7 @@ function quoteForLog(value: string): string {
 }
 
 export async function createArchive(opts: CreateArchiveOptions): Promise<CreateArchiveResult> {
-  const { mediaPath, workDir, password, baseName, volumeSizeMb, nfoPath, onProgress, signal } = opts;
+  const { mediaPaths, workDir, password, baseName, volumeSizeMb, nfoPath, onProgress, signal } = opts;
 
   ensureRarAvailable();
   if (signal?.aborted) throw new AbortError();
@@ -55,11 +57,14 @@ export async function createArchive(opts: CreateArchiveOptions): Promise<CreateA
   if (!baseName) {
     throw new Error('baseName is required for archive creation');
   }
+  if (!Array.isArray(mediaPaths) || mediaPaths.length === 0) {
+    throw new Error('mediaPaths must be a non-empty array');
+  }
 
   await fs.mkdir(workDir, { recursive: true });
 
   const archiveName = `${baseName}.rar`;
-  const inputs = [mediaPath];
+  const inputs = [...mediaPaths];
   if (nfoPath) inputs.push(nfoPath);
 
   const args = [

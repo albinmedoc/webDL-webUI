@@ -20,6 +20,12 @@ export interface DownloadOptions {
   // Newznab category (5020 TV/Foreign, 2010 Movies/Foreign) is auto-detected
   // server-side from the filename — no UI input needed.
   autoPostUsenet?: boolean
+
+  // Build a season pack from the completed download and post it as a single
+  // Usenet release. Independent of `autoPostUsenet`: enabling both posts
+  // per-episode AND the pack. Eligibility (allEpisodes + completeness +
+  // skip-latest) is enforced server-side.
+  autoPackSeason?: boolean
 }
 
 export interface ProbeState {
@@ -44,6 +50,7 @@ export interface DownloadJob {
   resolution: number | null
   allEpisodes: boolean
   autoPostUsenet: boolean
+  autoPackSeason: boolean
   output: string | null
   error: string | null
   outputDir: string | null
@@ -101,6 +108,7 @@ export const useDownloadStore = defineStore('download', () => {
     password: undefined,
     token: undefined,
     autoPostUsenet: false,
+    autoPackSeason: false,
   })
 
   // Quality probe state — last probed URL, available heights, loading flag.
@@ -203,10 +211,12 @@ export const useDownloadStore = defineStore('download', () => {
         url,
         args,
         autoPostUsenet: !!merged.autoPostUsenet,
+        autoPackSeason: !!merged.autoPackSeason,
         options: {
           resolution: resolution ?? null,
           allEpisodes: merged.allEpisodes,
           autoPostUsenet: !!merged.autoPostUsenet,
+          autoPackSeason: !!merged.autoPackSeason,
         },
       })
     }
@@ -261,6 +271,15 @@ export const useDownloadStore = defineStore('download', () => {
       quality: quality !== null && quality !== undefined ? String(quality) : null,
       applyNaming: true,
     })
+  }
+
+  // Trigger a manual "pack as season" on a completed download. The backend
+  // groups files by (show, season), runs the eligibility check in manual
+  // mode (skips the allEpisodes and skip-latest gates) and enqueues one
+  // pack job per eligible season. Diagnostics land in the download log.
+  const packAsSeason = (jobId: string) => {
+    if (!socket.value?.connected) return
+    socket.value.emit('pack-as-season', { downloadId: jobId })
   }
 
   const checkSvtplayDl = () => {
@@ -338,6 +357,7 @@ export const useDownloadStore = defineStore('download', () => {
     addDownloadJob,
     cancelDownload,
     postToUsenet,
+    packAsSeason,
     removeJob,
     clearCompletedJobs,
     clearOldJobs,

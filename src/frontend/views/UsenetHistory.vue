@@ -129,13 +129,43 @@
                 </td>
                 <td>
                   <div class="text-truncate" style="max-width: 360px" :title="job.mediaPath">
-                    <i class="bi bi-file-earmark-play me-1 text-muted"></i>
+                    <i
+                      class="bi me-1 text-muted"
+                      :class="job.releaseType === 'season' ? 'bi-collection' : 'bi-file-earmark-play'"
+                    ></i>
                     {{ basename(job.mediaPath) }}
                   </div>
-                  <small class="text-muted">{{ job.id.slice(0, 8) }}</small>
-                  <span v-if="job.category" class="badge bg-light text-dark border ms-1">
-                    {{ job.category }}
-                  </span>
+                  <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
+                    <small class="text-muted">{{ job.id.slice(0, 8) }}</small>
+                    <span
+                      v-if="job.releaseType === 'season'"
+                      class="badge bg-info text-dark"
+                      :title="job.mediaPaths?.join('\n') || ''"
+                    >
+                      <i class="bi bi-collection me-1"></i>
+                      season pack · {{ job.episodeCount ?? job.mediaPaths?.length ?? 0 }} eps
+                    </span>
+                    <span v-if="job.category" class="badge bg-light text-dark border">
+                      {{ job.category }}
+                    </span>
+                    <button
+                      v-if="job.releaseType === 'season' && job.mediaPaths && job.mediaPaths.length > 0"
+                      type="button"
+                      class="btn btn-link btn-sm p-0 ms-1"
+                      @click="togglePackFiles(job.id)"
+                    >
+                      <i class="bi" :class="packFilesOpen[job.id] ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                      {{ packFilesOpen[job.id] ? 'Hide files' : 'Show files' }}
+                    </button>
+                  </div>
+                  <ul
+                    v-if="packFilesOpen[job.id] && job.mediaPaths"
+                    class="small text-muted mt-1 mb-0 ps-3"
+                  >
+                    <li v-for="p in job.mediaPaths" :key="p" class="text-truncate" :title="p">
+                      {{ basename(p) }}
+                    </li>
+                  </ul>
                 </td>
                 <td>
                   <span class="badge" :class="badgeClass(job.state)">
@@ -312,6 +342,14 @@ const stateFilter = ref<UsenetState | ''>(
 const passwordVisible = ref<Record<string, boolean>>({})
 const passwordCache = ref<Record<string, string>>({})
 const deletingId = ref<string | null>(null)
+const packFilesOpen = ref<Record<string, boolean>>({})
+
+function togglePackFiles(jobId: string): void {
+  packFilesOpen.value = {
+    ...packFilesOpen.value,
+    [jobId]: !packFilesOpen.value[jobId],
+  }
+}
 
 const selectedIds = ref<Set<string>>(new Set())
 const bulkBusy = ref(false)

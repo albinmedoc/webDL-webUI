@@ -22,10 +22,15 @@ export const NON_TERMINAL_STATES: UsenetState[] = [
   'indexing',
 ]
 
+export type UsenetReleaseType = 'single' | 'season'
+
 export interface UsenetJobSummary {
   id: string
   downloadId: string | null
   mediaPath: string
+  mediaPaths: string[] | null
+  releaseType: UsenetReleaseType
+  episodeCount: number | null
   mediaSizeBytes: number
   state: UsenetState
   failureState: UsenetState | null

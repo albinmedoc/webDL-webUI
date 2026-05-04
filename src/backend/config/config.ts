@@ -19,6 +19,10 @@ export const config: ServerConfig = {
     REGISTRY.svtplaydlProxy,
     process.env[REGISTRY.svtplaydlProxy.envVar],
   ) as string,
+  seasonPackSkipLatest: parseValue(
+    REGISTRY.seasonPackSkipLatest,
+    process.env[REGISTRY.seasonPackSkipLatest.envVar],
+  ) as boolean,
   cors: {
     origin: "http://localhost:5173",
     methods: ["GET", "POST"]

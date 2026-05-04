@@ -308,6 +308,23 @@
                       <i class="bi bi-cloud-upload"></i>
                     </button>
                     <button
+                      v-if="
+                        usenetStore.enabled &&
+                        job.status === 'completed' &&
+                        job.files.length > 1
+                      "
+                      class="btn btn-outline-info"
+                      @click="packAsSeason(job)"
+                      :disabled="packedJobIds.has(job.id)"
+                      :title="
+                        packedJobIds.has(job.id)
+                          ? 'Already packed for Usenet'
+                          : 'Pack and post as season'
+                      "
+                    >
+                      <i class="bi bi-collection"></i>
+                    </button>
+                    <button
                       class="btn btn-outline-danger"
                       @click="confirmRemoveOne(job)"
                       title="Remove job"
@@ -423,6 +440,7 @@ const showFormModal = ref(false)
 const logsJobId = ref<string | null>(null)
 const filesJobId = ref<string | null>(null)
 const postedJobIds = ref<Set<string>>(new Set())
+const packedJobIds = ref<Set<string>>(new Set())
 
 interface ConfirmState {
   title: string
@@ -575,6 +593,18 @@ function postJob(job: DownloadJob): void {
     downloadStore.postToUsenet(job.id, file.path)
   }
   postedJobIds.value.add(job.id)
+}
+
+function packAsSeason(job: DownloadJob): void {
+  if (
+    !window.confirm(
+      `Pack ${job.files.length} file(s) as a season and post to Usenet?\n` +
+        'Eligibility (contiguous E01..ENMax) is enforced server-side; results land in the download log.',
+    )
+  )
+    return
+  downloadStore.packAsSeason(job.id)
+  packedJobIds.value.add(job.id)
 }
 
 function openLogs(id: string): void {

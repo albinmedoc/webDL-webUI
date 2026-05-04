@@ -204,6 +204,99 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
+/**
+ * Strip the episode-position marker from a release-name template so the same
+ * template can render a season pack name. Removes any `E{episode}` (the
+ * common form, e.g. `S{season}E{episode}`) and bare `{episode}`. The
+ * surrounding `renderReleaseName()` collapses any double-dots left behind.
+ */
+export function stripEpisodeFromTemplate(template: string): string {
+  return template.replace(/E\{episode\}/gi, '').replace(/\{episode\}/g, '');
+}
+
+export interface SeasonReleaseNameResult {
+  show: string;
+  season: string;
+  releaseName: string;
+}
+
+/**
+ * Compute the canonical release name for a season pack. Asserts every input
+ * shares `(show, season)` — returns null if any file fails to parse or if
+ * mixed seasons sneak through. Quality/codec/language are probed from the
+ * largest file in the set (best signal for the canonical encode).
+ */
+export async function renderSeasonReleaseName(
+  mediaPaths: string[],
+  input: ReleaseNamingInput = {},
+): Promise<SeasonReleaseNameResult | null> {
+  if (mediaPaths.length === 0) return null;
+
+  let show: string | null = null;
+  let season: string | null = null;
+  let year: string | undefined;
+  for (const p of mediaPaths) {
+    const parsed = parseSvtplayDlFilename(path.basename(p));
+    if (!parsed || !parsed.season) {
+      logger.warn('renderSeasonReleaseName skipping pack: file lacks season', { path: p });
+      return null;
+    }
+    if (show === null) {
+      show = parsed.show;
+      season = parsed.season;
+      year = parsed.year;
+    } else if (parsed.show !== show || parsed.season !== season) {
+      logger.warn('renderSeasonReleaseName skipping pack: mixed (show, season)', {
+        expected: { show, season },
+        got: { show: parsed.show, season: parsed.season },
+      });
+      return null;
+    }
+  }
+  if (!show || !season) return null;
+
+  // Probe the largest file — best representative of the canonical encode.
+  let probeTarget = mediaPaths[0];
+  let largest = 0;
+  for (const p of mediaPaths) {
+    try {
+      const stat = await fs.stat(p);
+      if (stat.size > largest) {
+        largest = stat.size;
+        probeTarget = p;
+      }
+    } catch {
+      // Ignore stat failures — fall back to first file.
+    }
+  }
+  const probed = await probeMedia(probeTarget);
+
+  const quality = input.quality
+    ? `${input.quality}p`
+    : probed?.height
+      ? `${probed.height}p`
+      : '';
+  const codec = probed?.codec ?? DEFAULT_CODEC;
+
+  const tokens: Record<string, string> = {
+    show,
+    season,
+    episode: '',
+    title: '',
+    year: year ?? '',
+    date: '',
+    quality,
+    codec,
+    language: probed?.language ?? '',
+    group: usenetConfig.releaseGroup,
+  };
+
+  const seasonTemplate = stripEpisodeFromTemplate(usenetConfig.releaseNameTemplate);
+  const releaseName = renderReleaseName(seasonTemplate, tokens);
+  if (!releaseName) return null;
+  return { show, season, releaseName };
+}
+
 export async function applyReleaseNaming(
   mediaPath: string,
   input: ReleaseNamingInput,

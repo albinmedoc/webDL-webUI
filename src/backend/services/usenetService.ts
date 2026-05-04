@@ -10,6 +10,7 @@ import {
   usenetJobs,
   TERMINAL_STATES,
   type NewUsenetJob,
+  type ReleaseType,
   type UsenetJob,
   type UsenetJobState,
 } from '../db/schema.js';
@@ -29,7 +30,19 @@ import { getWorkRoot } from './usenet/workspace.js';
 
 export interface EnqueueJobInput {
   downloadId?: string | null;
+  /**
+   * For single-file jobs: path to the file. For season packs: a *canonical*
+   * path whose basename drives the RAR/NZB names — does not need to exist on
+   * disk; the actual sources come from `mediaPaths`.
+   */
   mediaPath: string;
+  /**
+   * When populated, the job is a season pack. Every entry must point at a
+   * real file; the job's `mediaSizeBytes` is the sum of all of them.
+   */
+  mediaPaths?: string[] | null;
+  releaseType?: ReleaseType;
+  episodeCount?: number | null;
   category?: string | null;
 }
 
@@ -177,9 +190,22 @@ export async function enqueueJob(input: EnqueueJobInput): Promise<UsenetJob> {
 
   const id = randomUUID();
   const now = Date.now();
-  const mediaSize = await statSize(input.mediaPath);
-  if (mediaSize <= 0) {
-    throw new Error(`mediaPath has zero/unknown size: ${input.mediaPath}`);
+
+  const isPack = Array.isArray(input.mediaPaths) && input.mediaPaths.length > 0;
+  let mediaSize = 0;
+  if (isPack) {
+    for (const p of input.mediaPaths!) {
+      const size = await statSize(p);
+      if (size <= 0) {
+        throw new Error(`pack member has zero/unknown size: ${p}`);
+      }
+      mediaSize += size;
+    }
+  } else {
+    mediaSize = await statSize(input.mediaPath);
+    if (mediaSize <= 0) {
+      throw new Error(`mediaPath has zero/unknown size: ${input.mediaPath}`);
+    }
   }
 
   const workRoot = getWorkRoot();
@@ -190,11 +216,15 @@ export async function enqueueJob(input: EnqueueJobInput): Promise<UsenetJob> {
   }
 
   const password = generatePassword(16);
+  const releaseType: ReleaseType = input.releaseType ?? (isPack ? 'season' : 'single');
 
   const newJob: NewUsenetJob = {
     id,
     downloadId: input.downloadId ?? null,
     mediaPath: input.mediaPath,
+    mediaPaths: isPack ? JSON.stringify(input.mediaPaths) : null,
+    releaseType,
+    episodeCount: input.episodeCount ?? (isPack ? input.mediaPaths!.length : null),
     mediaSizeBytes: mediaSize,
     state: 'queued',
     failureState: null,
@@ -209,9 +239,18 @@ export async function enqueueJob(input: EnqueueJobInput): Promise<UsenetJob> {
   };
 
   getDb().insert(usenetJobs).values(newJob).run();
-  logger.info('Usenet job enqueued', { id, mediaPath: input.mediaPath, mediaSizeBytes: mediaSize });
+  logger.info('Usenet job enqueued', {
+    id,
+    mediaPath: input.mediaPath,
+    mediaSizeBytes: mediaSize,
+    releaseType,
+    fileCount: isPack ? input.mediaPaths!.length : 1,
+  });
 
-  notify(id, 'log', `Job enqueued: ${path.basename(input.mediaPath)} (${mediaSize} bytes)`);
+  const enqueueLabel = isPack
+    ? `Season pack enqueued: ${path.basename(input.mediaPath)} (${input.mediaPaths!.length} files, ${mediaSize} bytes)`
+    : `Job enqueued: ${path.basename(input.mediaPath)} (${mediaSize} bytes)`;
+  notify(id, 'log', enqueueLabel);
   notify(id, 'enqueued', null);
   scheduleNext();
 

@@ -29,6 +29,20 @@
       "when": 1777791598445,
       "tag": "0003_tough_nocturne",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1777834155571,
+      "tag": "0004_strange_nebula",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1777835098138,
+      "tag": "0005_secret_impossible_man",
+      "breakpoints": true
     }
   ]
 }

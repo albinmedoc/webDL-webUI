@@ -10,6 +10,7 @@ import {
 } from '../handlers/downloadHandler.js';
 import { UsenetHandler } from '../handlers/usenetHandler.js';
 import type {
+  UsenetPackAsSeason,
   UsenetUploadStart,
   UsenetUploadCancel,
   UsenetUploadRetry,
@@ -81,6 +82,10 @@ export class SocketController {
 
       socket.on('sync-usenet-uploads', () => {
         usenetHandler.handleSyncUploads();
+      });
+
+      socket.on('pack-as-season', (data: UsenetPackAsSeason) => {
+        usenetHandler.handlePackAsSeason(data);
       });
 
       socket.on('disconnect', () => {

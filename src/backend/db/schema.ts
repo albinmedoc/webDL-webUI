@@ -24,10 +24,19 @@ export const NON_TERMINAL_STATES: UsenetJobState[] = [
   'indexing',
 ];
 
+export const RELEASE_TYPES = ['single', 'season'] as const;
+export type ReleaseType = (typeof RELEASE_TYPES)[number];
+
 export const usenetJobs = sqliteTable('usenet_jobs', {
   id: text('id').primaryKey(),
   downloadId: text('download_id'),
   mediaPath: text('media_path').notNull(),
+  // JSON-encoded array of paths for season packs. null/empty for single-file
+  // jobs, in which case `mediaPath` is the source of truth. When populated,
+  // `mediaPath` is the *primary* file used for naming/baseName/category.
+  mediaPaths: text('media_paths'),
+  releaseType: text('release_type', { enum: RELEASE_TYPES }).notNull().default('single'),
+  episodeCount: integer('episode_count'),
   mediaSizeBytes: integer('media_size_bytes').notNull(),
   state: text('state', { enum: USENET_JOB_STATES }).notNull().default('queued'),
   failureState: text('failure_state', { enum: USENET_JOB_STATES }),
@@ -65,6 +74,7 @@ export const downloadJobs = sqliteTable('download_jobs', {
   resolution: integer('resolution'),
   allEpisodes: integer('all_episodes', { mode: 'boolean' }).notNull().default(false),
   autoPostUsenet: integer('auto_post_usenet', { mode: 'boolean' }).notNull().default(false),
+  autoPackSeason: integer('auto_pack_season', { mode: 'boolean' }).notNull().default(false),
   output: text('output'),
   error: text('error'),
   outputDir: text('output_dir'),

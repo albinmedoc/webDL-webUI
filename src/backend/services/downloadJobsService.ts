@@ -59,6 +59,7 @@ export interface DownloadJob {
   resolution: number | null;
   allEpisodes: boolean;
   autoPostUsenet: boolean;
+  autoPackSeason: boolean;
   output: string | null;
   error: string | null;
   outputDir: string | null;
@@ -75,6 +76,7 @@ export interface CreateDownloadJobInput {
   resolution?: number | null;
   allEpisodes?: boolean;
   autoPostUsenet?: boolean;
+  autoPackSeason?: boolean;
 }
 
 export interface UpdateDownloadJobFields {
@@ -107,6 +109,7 @@ function rowToJob(row: DownloadJobRow): DownloadJob {
     resolution: row.resolution,
     allEpisodes: row.allEpisodes,
     autoPostUsenet: row.autoPostUsenet,
+    autoPackSeason: row.autoPackSeason,
     output: row.output,
     error: row.error,
     outputDir: row.outputDir,
@@ -144,6 +147,7 @@ export function createJob(input: CreateDownloadJobInput): DownloadJob {
     resolution: input.resolution ?? null,
     allEpisodes: input.allEpisodes ?? false,
     autoPostUsenet: input.autoPostUsenet ?? false,
+    autoPackSeason: input.autoPackSeason ?? false,
     output: null,
     error: null,
     outputDir: null,
