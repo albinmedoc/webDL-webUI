@@ -11,11 +11,6 @@ services:
       # Single mount — everything the app writes lives under /data.
       - ./data:/data
 
-      # Required for Usenet uploads: bind-mount a host rar binary. The
-      # image does not bundle rar — provide one yourself, subject to the
-      # RARLAB license at https://www.rarlab.com/license.htm.
-      # - /usr/local/bin/rar:/usr/local/bin/rar:ro
-
       # Optional: mount a custom indexer hook script. The bundled ones live at
       # /app/hooks/indexers/ inside the image — no mount needed for those.
       # - ./my-hook.sh:/opt/hooks/my-hook.sh:ro
@@ -45,7 +40,6 @@ services:
       # ───────────────────── Indexer hook ──────────────────────
       # Bundled hooks (see hooks/indexers/ in the repo):
       # - INDEXER_HOOK_SCRIPT=/app/hooks/indexers/drunkenslug.sh
-      # - DRUNKENSLUG_UPLOAD_URL=https://nzbs.drunkenslug.com/upload.php
 
       # Custom paths (defaults point inside /data; override only if needed):
       # - DB_PATH=/data/svtplay-dl-webui.db
