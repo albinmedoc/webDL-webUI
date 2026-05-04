@@ -16,15 +16,14 @@
 #
 # drunkenslug's public bulk uploader takes the file via `files[]` and reads
 # the password out of the NZB's <meta type="password"> tag, so no API key or
-# extra metadata is needed here. Override the URL with DRUNKENSLUG_UPLOAD_URL
-# if the upstream host changes.
+# extra metadata is needed here.
 #
 # Exit 0 = success; any non-zero exit = failure (stderr is captured into the
 # job log and surfaced in the UI).
 
 set -euo pipefail
 
-DRUNKENSLUG_UPLOAD_URL="${DRUNKENSLUG_UPLOAD_URL:-https://nzbs.drunkenslug.com/upload.php}"
+DRUNKENSLUG_UPLOAD_URL="https://nzbs.drunkenslug.com/upload.php"
 
 : "${INDEXER_NZB_PATH:?INDEXER_NZB_PATH is required}"
 
@@ -33,16 +32,26 @@ if [[ ! -r "$INDEXER_NZB_PATH" ]]; then
     exit 1
 fi
 
-RESPONSE="$(
-    curl -fsS --max-time 120 \
+HTTP_STATUS="$(
+    curl -sS --max-time 120 \
+        -o /tmp/drunkenslug-response.$$ \
+        -w '%{http_code}' \
         -X POST \
-        -H "User-Agent: svtplay-dl-webui/1.0" \
         -F "files[]=@${INDEXER_NZB_PATH};type=application/x-nzb" \
         "${DRUNKENSLUG_UPLOAD_URL}"
 )" || {
-    echo "drunkenslug upload failed" >&2
+    echo "drunkenslug upload curl failed" >&2
+    rm -f "/tmp/drunkenslug-response.$$"
     exit 1
 }
 
-# Echo the indexer's response so it's captured in the job log.
-echo "$RESPONSE"
+RESPONSE="$(cat "/tmp/drunkenslug-response.$$" 2>/dev/null || true)"
+rm -f "/tmp/drunkenslug-response.$$"
+
+echo "HTTP ${HTTP_STATUS}"
+echo "${RESPONSE}"
+
+if [[ "${HTTP_STATUS}" -ge 400 ]]; then
+    echo "drunkenslug upload failed (HTTP ${HTTP_STATUS})" >&2
+    exit 1
+fi
